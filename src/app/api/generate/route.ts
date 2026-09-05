@@ -10,6 +10,7 @@
 import { pedirJSON } from '@/lib/ai/pedir';
 import { systemMaterial } from '@/lib/ai/prompts/material';
 import { esquemaMaterial, esquemaPeticionGenerate } from '@/lib/ai/schemas';
+import { limiteGenerate, ventanaLimiteMs } from '@/lib/config';
 import { registro } from '@/lib/observabilidad';
 import { traducirError } from '@/lib/pipeline/orquestador';
 import { claveCliente, consumir } from '@/lib/security/rate-limit';
@@ -18,13 +19,10 @@ import { envolverNoConfiable, generarNonce } from '@/lib/security/sanitize';
 export const maxDuration = 120;
 export const dynamic = 'force-dynamic';
 
-const LIMITE_PETICIONES = Number(process.env.RATE_LIMIT_GENERATE ?? 10);
-const VENTANA_MS = Number(process.env.RATE_LIMIT_VENTANA_MS ?? 60_000);
-
 export async function POST(req: Request): Promise<Response> {
   const inicio = Date.now();
 
-  const limite = consumir(`generate:${claveCliente(req)}`, LIMITE_PETICIONES, VENTANA_MS);
+  const limite = consumir(`generate:${claveCliente(req)}`, limiteGenerate(), ventanaLimiteMs());
   if (!limite.permitido) {
     return Response.json(
       {

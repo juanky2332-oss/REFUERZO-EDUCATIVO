@@ -8,6 +8,7 @@
 
 import { esquemaPeticionSolve } from '@/lib/ai/schemas';
 import { ejecutarPipeline } from '@/lib/pipeline/orquestador';
+import { limiteSolve, ventanaLimiteMs } from '@/lib/config';
 import { registro } from '@/lib/observabilidad';
 import { claveCliente, consumir } from '@/lib/security/rate-limit';
 import { MAX_IMAGENES } from '@/lib/security/upload';
@@ -19,9 +20,6 @@ export const dynamic = 'force-dynamic';
 
 /** Tamaño máximo del cuerpo, como primera barrera antes de parsear nada. */
 const MAX_BYTES_CUERPO = 28 * 1024 * 1024;
-
-const LIMITE_PETICIONES = Number(process.env.RATE_LIMIT_SOLVE ?? 20);
-const VENTANA_MS = Number(process.env.RATE_LIMIT_VENTANA_MS ?? 60_000);
 
 function lineaJSON(evento: EventoStream): Uint8Array {
   return new TextEncoder().encode(JSON.stringify(evento) + '\n');
@@ -38,7 +36,7 @@ function respuestaDeError(mensaje: string, codigo: string, status: number): Resp
 export async function POST(req: Request): Promise<Response> {
   const inicio = Date.now();
 
-  const limite = consumir(`solve:${claveCliente(req)}`, LIMITE_PETICIONES, VENTANA_MS);
+  const limite = consumir(`solve:${claveCliente(req)}`, limiteSolve(), ventanaLimiteMs());
   if (!limite.permitido) {
     return respuestaDeError(
       `Has hecho muchas consultas seguidas. Espera ${limite.reintentarEn} segundos y vuelve a intentarlo.`,

@@ -11,6 +11,8 @@
  * la función `consumir`.
  */
 
+import { LIMITES_POR_DEFECTO } from '@/lib/config';
+
 interface Ventana {
   marcas: number[];
 }
@@ -39,25 +41,34 @@ export interface ResultadoLimite {
 }
 
 export function consumir(clave: string, maximo: number, ventanaMs: number): ResultadoLimite {
+  // Un limite mal configurado no puede dejar la aplicacion inservible. Paso a
+  // produccion un maximo de 0 (variable de entorno vacia en Vercel) y bloqueo el
+  // 100% de las consultas: aqui se ignora cualquier valor absurdo.
+  const tope = Number.isInteger(maximo) && maximo >= 1 ? maximo : LIMITES_POR_DEFECTO.solve;
+  const ventanaValida =
+    Number.isFinite(ventanaMs) && ventanaMs >= 1000 ? ventanaMs : LIMITES_POR_DEFECTO.ventanaMs;
+
   const ahora = Date.now();
-  purgar(ahora, ventanaMs);
+  purgar(ahora, ventanaValida);
 
   const ventana = almacen.get(clave) ?? { marcas: [] };
-  ventana.marcas = ventana.marcas.filter((m) => ahora - m < ventanaMs);
+  ventana.marcas = ventana.marcas.filter((m) => ahora - m < ventanaValida);
 
-  if (ventana.marcas.length >= maximo) {
-    const masAntigua = Math.min(...ventana.marcas);
+  if (ventana.marcas.length >= tope) {
+    // Math.min() sobre una lista vacia devuelve Infinity, y el usuario acababa
+    // leyendo "espera Infinity segundos". El respaldo lo impide.
+    const masAntigua = ventana.marcas.length > 0 ? Math.min(...ventana.marcas) : ahora;
     almacen.set(clave, ventana);
     return {
       permitido: false,
       restantes: 0,
-      reintentarEn: Math.ceil((ventanaMs - (ahora - masAntigua)) / 1000),
+      reintentarEn: Math.max(1, Math.ceil((ventanaValida - (ahora - masAntigua)) / 1000)),
     };
   }
 
   ventana.marcas.push(ahora);
   almacen.set(clave, ventana);
-  return { permitido: true, restantes: maximo - ventana.marcas.length, reintentarEn: 0 };
+  return { permitido: true, restantes: tope - ventana.marcas.length, reintentarEn: 0 };
 }
 
 /**

@@ -8,7 +8,7 @@
 
 export interface ImagenPreparada {
   id: string;
-  /** URL de objeto para la previsualización. Hay que revocarla al eliminarla. */
+  /** Miniatura en data URL para previsualizar antes de enviar. */
   previsualizacion: string;
   mime: string;
   base64: string;
@@ -16,6 +16,12 @@ export interface ImagenPreparada {
   nombre: string;
   /** Grados aplicados respecto al original. */
   rotacion: number;
+  /**
+   * Fichero tal cual lo eligio el usuario. Se conserva para poder regenerar la
+   * imagen al girarla. Va dentro del propio objeto (y no en un mapa auxiliar)
+   * para que se libere solo cuando la imagen sale de la lista.
+   */
+  original: File;
 }
 
 /** Lado mayor máximo. Suficiente para leer texto impreso y manuscrito. */
@@ -102,17 +108,8 @@ export async function prepararImagen(archivo: File, rotacion = 0): Promise<Image
     bytes,
     nombre: archivo.name || 'foto.jpg',
     rotacion,
+    original: archivo,
   };
-}
-
-/** Vuelve a generar la imagen con 90° más de giro. */
-export async function rotarImagen(
-  imagen: ImagenPreparada,
-  archivoOriginal: File,
-): Promise<ImagenPreparada> {
-  const rotacion = (imagen.rotacion + 90) % 360;
-  const nueva = await prepararImagen(archivoOriginal, rotacion);
-  return { ...nueva, id: imagen.id };
 }
 
 export function formatearTamano(bytes: number): string {

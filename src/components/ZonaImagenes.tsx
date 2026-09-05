@@ -28,7 +28,6 @@ export function ZonaImagenes({ imagenes, onCambio, deshabilitado = false }: Prop
   const [arrastrando, setArrastrando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
-  const originales = useRef(new Map<string, File>());
   const inputArchivo = useRef<HTMLInputElement>(null);
   const inputCamara = useRef<HTMLInputElement>(null);
   const idZona = useId();
@@ -51,7 +50,6 @@ export function ZonaImagenes({ imagenes, onCambio, deshabilitado = false }: Prop
       for (const archivo of lista.slice(0, hueco)) {
         try {
           const preparada = await prepararImagen(archivo);
-          originales.current.set(preparada.id, archivo);
           nuevas.push(preparada);
         } catch (e) {
           fallos.push(
@@ -71,17 +69,14 @@ export function ZonaImagenes({ imagenes, onCambio, deshabilitado = false }: Prop
   );
 
   const eliminar = (id: string) => {
-    originales.current.delete(id);
     onCambio(imagenes.filter((i) => i.id !== id));
     setError(null);
   };
 
   const rotar = async (imagen: ImagenPreparada) => {
-    const original = originales.current.get(imagen.id);
-    if (!original) return;
     setOcupado(true);
     try {
-      const girada = await prepararImagen(original, (imagen.rotacion + 90) % 360);
+      const girada = await prepararImagen(imagen.original, (imagen.rotacion + 90) % 360);
       onCambio(imagenes.map((i) => (i.id === imagen.id ? { ...girada, id: imagen.id } : i)));
     } catch {
       setError('No he podido girar la imagen.');

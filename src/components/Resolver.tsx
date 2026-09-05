@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { ProgresoFases } from './ProgresoFases';
 import { VistaRespuesta } from './VistaRespuesta';
 import { ZonaImagenes } from './ZonaImagenes';
@@ -76,9 +75,9 @@ function resumirParaHistorial(r: RespuestaEducativa): string {
     .slice(0, 1500);
 }
 
-export function Resolver() {
-  const parametros = useSearchParams();
-  const modo = parametros.get('modo');
+/** El modo llega desde el servidor, leido de la URL, para que la pagina se
+ * pinte entera en el primer render en vez de mostrar un "Cargando...". */
+export function Resolver({ modo }: { modo: string | null }) {
 
   const [texto, setTexto] = useState('');
   const [imagenes, setImagenes] = useState<ImagenPreparada[]>([]);

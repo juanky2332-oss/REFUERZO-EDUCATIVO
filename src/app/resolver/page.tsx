@@ -1,4 +1,3 @@
-import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { Resolver } from '@/components/Resolver';
 
@@ -8,14 +7,18 @@ export const metadata: Metadata = {
     'Sube la foto de tu ejercicio o escribe tu duda y recibe una explicación paso a paso, con el resultado comprobado.',
 };
 
-export default function PaginaResolver() {
-  return (
-    <Suspense
-      fallback={
-        <div className="mx-auto max-w-3xl px-4 py-10 text-texto-suave">Cargando…</div>
-      }
-    >
-      <Resolver />
-    </Suspense>
-  );
+/**
+ * El parámetro `modo` se lee aquí, en el servidor, y se pasa como prop.
+ *
+ * Con `useSearchParams` en el cliente, Next obliga a envolver la página en un
+ * `Suspense` y el primer pintado era un «Cargando…» en blanco. Leyéndolo aquí,
+ * la pantalla llega hecha.
+ */
+export default async function PaginaResolver({
+  searchParams,
+}: {
+  searchParams: Promise<{ modo?: string | string[] }>;
+}) {
+  const { modo } = await searchParams;
+  return <Resolver modo={typeof modo === 'string' ? modo : null} />;
 }

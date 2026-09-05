@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { VistaMaterial } from './VistaMaterial';
 import { Icono, type NombreIcono } from './ui/Icono';
 import { Boton, Segmentado, Tarjeta } from './ui/primitivos';
@@ -60,14 +59,13 @@ function cursoConcreto(c: Curso): Curso {
   return c === 'desconocido' || c === 'otro' ? '1eso' : c;
 }
 
-export function GeneradorMaterial() {
-  const parametros = useSearchParams();
+/** El tipo inicial llega del servidor, leido de la URL. */
+export function GeneradorMaterial({ tipoInicial }: { tipoInicial: string | null }) {
   const [preferencias, guardarPreferencias] = usePreferencias();
 
-  const [tipo, setTipo] = useState<Tipo>(() => {
-    const t = parametros.get('tipo');
-    return esTipo(t) ? t : 'ejercicios';
-  });
+  const [tipo, setTipo] = useState<Tipo>(() =>
+    esTipo(tipoInicial) ? tipoInicial : 'ejercicios',
+  );
   const [tema, setTema] = useState('');
   const [numero, setNumero] = useState(6);
   const [notas, setNotas] = useState('');

@@ -1,0 +1,10 @@
+# Finales de línea normalizados a LF para que el repositorio sea igual en
+# Windows, macOS y Linux, y los diffs no se llenen de cambios fantasma.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary

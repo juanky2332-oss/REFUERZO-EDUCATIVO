@@ -1,0 +1,186 @@
+@import "tailwindcss";
+
+/*
+  Sistema visual de REFUERZO EDUCATIVO.
+
+  Intención (regla 64): educación + tecnología + confianza + sencillez.
+  Ni infantil ni corporativo frío: azul profundo de base, tipografía clara,
+  mucho aire y un acento cálido reservado para lo que el alumno se lleva.
+
+  Todos los colores se declaran primero en :root (tema claro) y se redefinen en
+  el bloque oscuro, para que ningún color quede definido sólo en un tema.
+*/
+
+:root {
+  color-scheme: light dark;
+
+  --fondo: #f5f7fb;
+  --fondo-alt: #eef1f8;
+  --superficie: #ffffff;
+  --superficie-2: #f8fafc;
+  --borde: #dfe4ee;
+  --borde-fuerte: #c6cfe0;
+
+  --texto: #131a2b;
+  --texto-suave: #55607a;
+  --texto-tenue: #7b859c;
+
+  --primario: #2f4bd6;
+  --primario-fuerte: #2439ac;
+  --primario-suave: #e8ecfd;
+  --sobre-primario: #ffffff;
+
+  --acento: #b45309;
+  --acento-suave: #fdf3e3;
+
+  --exito: #146c43;
+  --exito-suave: #e6f4ec;
+  --aviso: #92610a;
+  --aviso-suave: #fdf4e1;
+  --error: #b02a2a;
+  --error-suave: #fdecec;
+  --neutro: #4a5568;
+  --neutro-suave: #eef1f6;
+
+  --sombra: 0 1px 2px rgb(19 26 43 / 0.05), 0 8px 24px -12px rgb(19 26 43 / 0.18);
+  --radio: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #0a0f1d;
+    --fondo-alt: #0f1526;
+    --superficie: #131a2c;
+    --superficie-2: #182137;
+    --borde: #26304a;
+    --borde-fuerte: #35415f;
+
+    --texto: #e9edf6;
+    --texto-suave: #a6b0c6;
+    --texto-tenue: #7b869e;
+
+    --primario: #7f95f5;
+    --primario-fuerte: #9aacf8;
+    --primario-suave: #1c2647;
+    --sobre-primario: #0a0f1d;
+
+    --acento: #f0b45e;
+    --acento-suave: #2b2113;
+
+    --exito: #5fcf95;
+    --exito-suave: #122a1f;
+    --aviso: #f0c159;
+    --aviso-suave: #2c2413;
+    --error: #f38a8a;
+    --error-suave: #2e1717;
+    --neutro: #a6b0c6;
+    --neutro-suave: #1b2338;
+
+    --sombra: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -16px rgb(0 0 0 / 0.7);
+  }
+}
+
+@theme inline {
+  --color-fondo: var(--fondo);
+  --color-fondo-alt: var(--fondo-alt);
+  --color-superficie: var(--superficie);
+  --color-superficie-2: var(--superficie-2);
+  --color-borde: var(--borde);
+  --color-borde-fuerte: var(--borde-fuerte);
+  --color-texto: var(--texto);
+  --color-texto-suave: var(--texto-suave);
+  --color-texto-tenue: var(--texto-tenue);
+  --color-primario: var(--primario);
+  --color-primario-fuerte: var(--primario-fuerte);
+  --color-primario-suave: var(--primario-suave);
+  --color-sobre-primario: var(--sobre-primario);
+  --color-acento: var(--acento);
+  --color-acento-suave: var(--acento-suave);
+  --color-exito: var(--exito);
+  --color-exito-suave: var(--exito-suave);
+  --color-aviso: var(--aviso);
+  --color-aviso-suave: var(--aviso-suave);
+  --color-error: var(--error);
+  --color-error-suave: var(--error-suave);
+  --color-neutro: var(--neutro);
+  --color-neutro-suave: var(--neutro-suave);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --radius-tarjeta: var(--radio);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: var(--font-sans);
+  /* Evita el zoom automático de iOS al enfocar un campo. */
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* Foco visible y consistente en toda la aplicación (regla 62). */
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 3px solid var(--primario);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Respeta a quien pide menos movimiento. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Sólo se ve al tabular: salto directo al contenido. */
+.saltar-al-contenido {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+}
+.saltar-al-contenido:focus {
+  left: 8px;
+  top: 8px;
+  padding: 10px 16px;
+  background: var(--primario);
+  color: var(--sobre-primario);
+  border-radius: 8px;
+}
+
+/* Puntos animados del indicador de fase en curso. */
+@keyframes latido {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+.latido {
+  animation: latido 1.4s ease-in-out infinite;
+}
+
+/* Impresión: cuadernillos y solucionarios legibles en papel (regla 28). */
+@media print {
+  .no-imprimir {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .hoja {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+  a[href]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.75em;
+    color: #444;
+  }
+}

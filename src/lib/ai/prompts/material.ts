@@ -13,13 +13,13 @@ const DESCRIPCION_TIPO: Record<PeticionGenerate['tipo'], string> = {
   examen:
     'un examen realista de aula, con la puntuación de cada pregunta sumando 10 puntos en total, mezclando preguntas de aplicación directa y algún problema. Sin preguntas trampa.',
   resumen:
-    'un resumen del tema. En este caso cada "pregunta" es un apartado del resumen: el campo "enunciado" es el título del apartado y "solucion" es el contenido explicado del apartado.',
+    'un resumen del tema. En este caso cada elemento de "preguntas" es un APARTADO del resumen: "enunciado" es el título del apartado y "solucion" es el contenido explicado de ese apartado. Pon "puntuacion": 0 en todos, porque un resumen no se puntúa.',
   ficha:
     'una ficha de trabajo con una parte breve de recordatorio teórico y actividades de aplicación.',
   test:
     'preguntas tipo test. Cada "enunciado" incluye la pregunta y cuatro opciones etiquetadas a), b), c) y d), una sola correcta. En "solucion" indica la letra correcta y por qué las otras no lo son.',
   plan_estudio:
-    'un plan de estudio por sesiones. Cada "pregunta" es una sesión: el "enunciado" describe qué hacer en esa sesión y "solucion" indica cómo saber si la sesión ha ido bien.',
+    'un plan de estudio repartido en sesiones. OJO: cada elemento de "preguntas" es UNA SESIÓN DE TRABAJO, no un ejercicio suelto. En "enunciado" escribe el nombre de la sesión, su objetivo y qué hacer exactamente: qué repasar, qué practicar, cuántos ejercicios y cuánto tiempo dedicarle (entre 20 y 45 minutos). En "solucion" escribe cómo sabrá el alumno que esa sesión le ha salido bien, es decir qué tiene que ser capaz de hacer al terminarla. Pon "puntuacion": 0 en todas, porque un plan no se puntúa.',
 };
 
 export function systemMaterial(p: PeticionGenerate): string {
@@ -60,5 +60,13 @@ ESQUEMA JSON EXACTO:
   "notasDidacticas": string[]
 }
 
-Genera exactamente ${p.numeroPreguntas} elementos en "preguntas".`;
+Genera exactamente ${p.numeroPreguntas} elementos en "preguntas".${
+    p.diasDisponibles
+      ? `
+
+QUEDAN ${p.diasDisponibles} DÍAS HASTA EL EXAMEN. Reparte el trabajo en ese plazo de forma realista para alguien
+de 12 o 13 años: sesiones cortas, lo más importante primero y las últimas sesiones dedicadas a repasar y a
+comprobar que se ha aprendido, no a materia nueva.`
+      : ''
+  }`;
 }

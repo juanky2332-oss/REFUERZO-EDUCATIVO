@@ -171,6 +171,8 @@ export const esquemaPeticionGenerate = z.object({
   nivel: z.enum(['A', 'B', 'C', 'D']).optional().default('B'),
   numeroPreguntas: z.number().int().min(1).max(20).optional().default(6),
   notas: z.string().max(2000).optional().default(''),
+  /** Días que quedan hasta el examen. Ordena las sesiones de un plan de estudio. */
+  diasDisponibles: z.number().int().min(1).max(120).nullable().optional().default(null),
 });
 
 export type PeticionGenerate = z.infer<typeof esquemaPeticionGenerate>;

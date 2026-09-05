@@ -5,7 +5,10 @@ import { useSearchParams } from 'next/navigation';
 import { ProgresoFases } from './ProgresoFases';
 import { VistaRespuesta } from './VistaRespuesta';
 import { ZonaImagenes } from './ZonaImagenes';
+import { Icono } from './ui/Icono';
+import { Boton, Segmentado } from './ui/primitivos';
 import type { ImagenPreparada } from '@/lib/cliente/imagenes';
+import { usePreferencias } from '@/lib/cliente/preferencias';
 import {
   CURSOS,
   MATERIAS,
@@ -17,7 +20,6 @@ import {
   type FasePipeline,
   type Materia,
   type MensajeHistorial,
-  type Nivel,
   type RespuestaEducativa,
 } from '@/lib/types';
 
@@ -25,7 +27,7 @@ import {
  * Pantalla de trabajo.
  *
  * Mantiene el contexto de la conversación: las preguntas de seguimiento
- * ("no entiendo el paso 2") viajan con el historial para que se entiendan como
+ * («no entiendo el paso 2») viajan con el historial para que se entiendan como
  * parte del mismo ejercicio (regla 48).
  */
 
@@ -40,7 +42,7 @@ const ETIQUETA_MATERIA: Record<Materia, string> = {
   fisica_quimica: 'Física y Química',
   biologia_geologia: 'Biología y Geología',
   otra: 'Otra materia',
-  desconocida: 'No lo sé / que lo detecte',
+  desconocida: 'Que lo detecte',
 };
 
 const ETIQUETA_CURSO: Record<Curso, string> = {
@@ -49,6 +51,14 @@ const ETIQUETA_CURSO: Record<Curso, string> = {
   otro: 'Otro curso',
   desconocido: 'No lo sé',
 };
+
+/** Ejemplos para arrancar cuando la pantalla está vacía. */
+const EJEMPLOS = [
+  'Resuelve 3x + 2 = 14 y explícame por qué se cambia de signo',
+  'Un cuerpo tiene 250 g de masa y 100 cm3 de volumen. ¿Cuál es su densidad en kg/m3?',
+  'Explícame la diferencia entre célula procariota y eucariota',
+  '¿Cómo paso 3/4 a decimal y a porcentaje?',
+];
 
 function nuevoId() {
   return Math.random().toString(36).slice(2, 10);
@@ -72,9 +82,7 @@ export function Resolver() {
 
   const [texto, setTexto] = useState('');
   const [imagenes, setImagenes] = useState<ImagenPreparada[]>([]);
-  const [nivel, setNivel] = useState<Nivel>('B');
-  const [curso, setCurso] = useState<Curso>('desconocido');
-  const [materia, setMateria] = useState<Materia>('desconocida');
+  const [preferencias, guardarPreferencias] = usePreferencias();
   const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
 
   const [entradas, setEntradas] = useState<Entrada[]>([]);
@@ -84,6 +92,7 @@ export function Resolver() {
 
   const abortar = useRef<AbortController | null>(null);
   const finRef = useRef<HTMLDivElement>(null);
+  const areaTexto = useRef<HTMLTextAreaElement>(null);
 
   const hayConversacion = entradas.length > 0;
 
@@ -94,7 +103,7 @@ export function Resolver() {
     if (modo === 'foto') {
       return 'Si quieres, añade algo: «no entiendo el apartado b», «me sale 12 y creo que está mal»…';
     }
-    return 'Escribe tu duda. Por ejemplo: «explícame las ecuaciones de primer grado» o «no entiendo por qué se cambia de signo».';
+    return 'Escribe tu duda. Por ejemplo: «explícame las ecuaciones de primer grado».';
   }, [modo]);
 
   useEffect(() => {
@@ -134,9 +143,9 @@ export function Resolver() {
     const cuerpo = {
       texto: texto.trim(),
       imagenes: imagenes.map((i) => ({ mime: i.mime, base64: i.base64, nombre: i.nombre })),
-      nivel,
-      curso,
-      materia,
+      nivel: preferencias.nivel,
+      curso: preferencias.curso,
+      materia: preferencias.materia,
       historial: historial(),
     };
 
@@ -145,57 +154,6 @@ export function Resolver() {
     setEnCurso(true);
     setFasesHechas([]);
     setFaseActual('analisis');
-
-    try {
-      const res = await fetch('/api/solve', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(cuerpo),
-        signal: control.signal,
-      });
-
-      if (!res.body) throw new Error('sin cuerpo');
-
-      const lector = res.body.getReader();
-      const decodificador = new TextDecoder();
-      let resto = '';
-
-      for (;;) {
-        const { done, value } = await lector.read();
-        if (done) break;
-
-        resto += decodificador.decode(value, { stream: true });
-        const lineas = resto.split('\n');
-        resto = lineas.pop() ?? '';
-
-        for (const linea of lineas) {
-          if (!linea.trim()) continue;
-          let evento: EventoStream;
-          try {
-            evento = JSON.parse(linea) as EventoStream;
-          } catch {
-            continue;
-          }
-          procesarEvento(evento);
-        }
-      }
-    } catch (e) {
-      if (!(e instanceof DOMException && e.name === 'AbortError')) {
-        setEntradas((prev) => [
-          ...prev,
-          {
-            tipo: 'error',
-            id: nuevoId(),
-            mensaje:
-              'Se ha cortado la conexión antes de terminar. Comprueba tu conexión y vuelve a intentarlo.',
-          },
-        ]);
-      }
-    } finally {
-      setEnCurso(false);
-      setFaseActual(null);
-      abortar.current = null;
-    }
 
     function procesarEvento(evento: EventoStream) {
       switch (evento.tipo) {
@@ -230,7 +188,61 @@ export function Resolver() {
           break;
       }
     }
-  }, [curso, enCurso, historial, imagenes, materia, nivel, texto]);
+
+    try {
+      const res = await fetch('/api/solve', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(cuerpo),
+        signal: control.signal,
+      });
+
+      if (!res.body) throw new Error('sin cuerpo');
+
+      const lector = res.body.getReader();
+      const decodificador = new TextDecoder();
+      let resto = '';
+
+      for (;;) {
+        const { done, value } = await lector.read();
+        if (done) break;
+
+        resto += decodificador.decode(value, { stream: true });
+        const lineas = resto.split('\n');
+        resto = lineas.pop() ?? '';
+
+        for (const linea of lineas) {
+          if (!linea.trim()) continue;
+          try {
+            procesarEvento(JSON.parse(linea) as EventoStream);
+          } catch {
+            // Una línea a medias no debe tumbar la lectura del resto.
+          }
+        }
+      }
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === 'AbortError')) {
+        setEntradas((prev) => [
+          ...prev,
+          {
+            tipo: 'error',
+            id: nuevoId(),
+            mensaje:
+              'Se ha cortado la conexión antes de terminar. Comprueba tu conexión y vuelve a intentarlo.',
+          },
+        ]);
+      }
+    } finally {
+      setEnCurso(false);
+      setFaseActual(null);
+      abortar.current = null;
+    }
+  }, [enCurso, historial, imagenes, preferencias, texto]);
+
+  function usarEjemplo(t: string) {
+    setTexto(t);
+    areaTexto.current?.focus();
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:py-8">
@@ -244,9 +256,32 @@ export function Resolver() {
                 : 'Cuéntame qué no entiendes'}
           </h1>
           <p className="mt-2 text-texto-suave">
-            Puedes enviar sólo una foto: si entiendo lo que se pide, me pongo con ello; y si algo no
-            se lee bien, te lo digo en vez de inventármelo.
+            Puedes mandar sólo una foto: si entiendo lo que se pide, me pongo con ello, y si algo no
+            se lee bien te lo digo en vez de inventármelo.
           </p>
+
+          <div className="mt-5">
+            <p className="text-xs font-bold uppercase tracking-[0.08em] text-texto-tenue">
+              O prueba con uno de estos
+            </p>
+            <ul className="mt-2 flex flex-col gap-1.5">
+              {EJEMPLOS.map((e) => (
+                <li key={e}>
+                  <button
+                    type="button"
+                    onClick={() => usarEjemplo(e)}
+                    className="group flex w-full items-center gap-2.5 rounded-xl border border-borde bg-superficie px-3.5 py-2.5 text-left text-sm text-texto-suave transition hover:border-primario/40 hover:bg-superficie-2 hover:text-texto"
+                  >
+                    <Icono
+                      nombre="flecha"
+                      className="h-4 w-4 shrink-0 text-texto-tenue transition group-hover:translate-x-0.5 group-hover:text-primario"
+                    />
+                    {e}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         </header>
       )}
 
@@ -263,13 +298,13 @@ export function Resolver() {
                         key={n}
                         src={m}
                         alt={`Imagen ${n + 1} que has enviado`}
-                        className="h-20 w-20 rounded-lg border border-borde object-cover"
+                        className="h-20 w-20 rounded-xl border border-borde object-cover"
                       />
                     ))}
                   </div>
                 )}
                 {e.texto && (
-                  <p className="max-w-[85%] whitespace-pre-wrap rounded-tarjeta bg-primario px-4 py-2.5 text-sobre-primario">
+                  <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-primario px-4 py-2.5 text-sobre-primario">
                     {e.texto}
                   </p>
                 )}
@@ -283,17 +318,15 @@ export function Resolver() {
                 <VistaRespuesta respuesta={e.respuesta} />
                 {e.respuesta.preguntaDeSeguimiento && (
                   <div className="no-imprimir mt-3 rounded-tarjeta border border-borde bg-superficie-2 p-4">
-                    <p className="text-sm text-texto-suave">
-                      {e.respuesta.preguntaDeSeguimiento}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
+                    <p className="text-sm text-texto-suave">{e.respuesta.preguntaDeSeguimiento}</p>
+                    <div className="mt-2.5 flex flex-wrap gap-2">
                       {['No entiendo un paso', 'Ponme otro parecido', 'Explícamelo más fácil'].map(
                         (s) => (
                           <button
                             key={s}
                             type="button"
-                            onClick={() => setTexto(s)}
-                            className="min-h-9 rounded-full border border-borde-fuerte bg-superficie px-3 text-sm text-texto-suave hover:bg-superficie-2"
+                            onClick={() => usarEjemplo(s)}
+                            className="min-h-9 rounded-full border border-borde-fuerte bg-superficie px-3.5 text-sm text-texto-suave transition hover:border-primario/40 hover:text-texto"
                           >
                             {s}
                           </button>
@@ -308,11 +341,9 @@ export function Resolver() {
 
           if (e.tipo === 'necesita_datos') {
             return (
-              <li
-                key={e.id}
-                className="rounded-tarjeta border border-aviso/40 bg-aviso-suave p-5"
-              >
-                <h2 className="text-base font-semibold text-aviso">
+              <li key={e.id} className="rounded-tarjeta border border-aviso/40 bg-aviso-suave p-5">
+                <h2 className="flex items-center gap-2 text-base font-semibold text-aviso">
+                  <Icono nombre="aviso" className="h-5 w-5" />
                   Necesito que me aclares algo
                 </h2>
                 {e.analisis.resumenTarea && (
@@ -339,8 +370,9 @@ export function Resolver() {
             <li
               key={e.id}
               role="alert"
-              className="rounded-tarjeta border border-error/30 bg-error-suave p-5 text-sm text-error"
+              className="flex items-start gap-2.5 rounded-tarjeta border border-error/30 bg-error-suave p-5 text-sm text-error"
             >
+              <Icono nombre="aviso" className="mt-0.5 h-4 w-4 shrink-0" />
               {e.mensaje}
             </li>
           );
@@ -356,7 +388,7 @@ export function Resolver() {
       <div ref={finRef} />
 
       <form
-        className="no-imprimir sticky bottom-0 mt-6 rounded-tarjeta border border-borde bg-superficie p-4 shadow-[0_-8px_24px_-20px_rgba(0,0,0,0.4)]"
+        className="no-imprimir zona-segura-abajo sticky bottom-0 mt-6 rounded-tarjeta border border-borde bg-superficie/95 p-4 shadow-[0_-10px_30px_-24px_rgba(19,26,43,.55)] backdrop-blur"
         onSubmit={(e) => {
           e.preventDefault();
           void enviar();
@@ -367,6 +399,7 @@ export function Resolver() {
         </label>
         <textarea
           id="pregunta"
+          ref={areaTexto}
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           onKeyDown={(e) => {
@@ -379,55 +412,54 @@ export function Resolver() {
           maxLength={8000}
           placeholder={marcador}
           disabled={enCurso}
-          className="w-full resize-y rounded-lg border border-borde bg-superficie-2 p-3 text-texto placeholder:text-texto-tenue disabled:opacity-60"
+          className="w-full resize-y rounded-xl border border-borde bg-superficie-2 p-3 text-texto placeholder:text-texto-tenue disabled:opacity-60"
         />
 
         <div className="mt-3">
           <ZonaImagenes imagenes={imagenes} onCambio={setImagenes} deshabilitado={enCurso} />
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <button
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <Boton
             type="button"
+            variante="sutil"
+            icono="ajustes"
             onClick={() => setAjustesAbiertos((v) => !v)}
             aria-expanded={ajustesAbiertos}
-            className="min-h-11 rounded-lg px-3 text-sm font-medium text-texto-suave hover:bg-superficie-2"
           >
-            Ajustes · Nivel {nivel}
-            <span aria-hidden="true"> {ajustesAbiertos ? '▲' : '▼'}</span>
-          </button>
+            Nivel {preferencias.nivel}
+            <span className="hidden text-texto-tenue sm:inline">
+              · {NIVEL_DESCRIPCION[preferencias.nivel].titulo}
+            </span>
+          </Boton>
 
           <div className="flex gap-2">
             {enCurso && (
-              <button
-                type="button"
-                onClick={() => abortar.current?.abort()}
-                className="min-h-11 rounded-lg border border-borde-fuerte px-4 text-sm font-medium text-texto-suave hover:bg-superficie-2"
-              >
+              <Boton type="button" variante="secundario" onClick={() => abortar.current?.abort()}>
                 Parar
-              </button>
+              </Boton>
             )}
-            <button
+            <Boton
               type="submit"
+              iconoDerecha="flecha"
               disabled={enCurso || (!texto.trim() && imagenes.length === 0)}
-              className="min-h-11 rounded-lg bg-primario px-5 font-semibold text-sobre-primario hover:bg-primario-fuerte disabled:opacity-45"
             >
               {enCurso ? 'Trabajando…' : 'Ayúdame'}
-            </button>
+            </Boton>
           </div>
         </div>
 
         {ajustesAbiertos && (
-          <div className="mt-3 grid gap-4 border-t border-borde pt-4 sm:grid-cols-3">
+          <div className="mt-3 grid gap-4 border-t border-borde pt-4 sm:grid-cols-2">
             <div>
               <label htmlFor="curso" className="block text-sm font-medium text-texto">
                 Curso
               </label>
               <select
                 id="curso"
-                value={curso}
-                onChange={(e) => setCurso(e.target.value as Curso)}
-                className="mt-1 min-h-11 w-full rounded-lg border border-borde bg-superficie-2 px-2 text-texto"
+                value={preferencias.curso}
+                onChange={(e) => guardarPreferencias({ curso: e.target.value as Curso })}
+                className="mt-1 min-h-11 w-full rounded-xl border border-borde bg-superficie-2 px-2.5 text-texto"
               >
                 {CURSOS.map((c) => (
                   <option key={c} value={c}>
@@ -443,9 +475,9 @@ export function Resolver() {
               </label>
               <select
                 id="materia"
-                value={materia}
-                onChange={(e) => setMateria(e.target.value as Materia)}
-                className="mt-1 min-h-11 w-full rounded-lg border border-borde bg-superficie-2 px-2 text-texto"
+                value={preferencias.materia}
+                onChange={(e) => guardarPreferencias({ materia: e.target.value as Materia })}
+                className="mt-1 min-h-11 w-full rounded-xl border border-borde bg-superficie-2 px-2.5 text-texto"
               >
                 {MATERIAS.map((m) => (
                   <option key={m} value={m}>
@@ -455,31 +487,23 @@ export function Resolver() {
               </select>
             </div>
 
-            <fieldset>
-              <legend className="text-sm font-medium text-texto">Nivel de explicación</legend>
-              <div className="mt-1 flex gap-1">
-                {NIVELES.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setNivel(n)}
-                    aria-pressed={nivel === n}
-                    title={`${NIVEL_DESCRIPCION[n].titulo}: ${NIVEL_DESCRIPCION[n].detalle}`}
-                    className={[
-                      'min-h-11 flex-1 rounded-lg border text-sm font-semibold',
-                      nivel === n
-                        ? 'border-primario bg-primario text-sobre-primario'
-                        : 'border-borde bg-superficie-2 text-texto-suave hover:bg-superficie',
-                    ].join(' ')}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-              <p className="mt-1 text-xs text-texto-tenue">
-                {NIVEL_DESCRIPCION[nivel].titulo}: {NIVEL_DESCRIPCION[nivel].detalle}
+            <div className="sm:col-span-2">
+              <p className="mb-1 text-sm font-medium text-texto">Nivel de explicación</p>
+              <Segmentado
+                etiqueta="Nivel de explicación"
+                valor={preferencias.nivel}
+                onCambio={(nivel) => guardarPreferencias({ nivel })}
+                opciones={NIVELES.map((n) => ({
+                  valor: n,
+                  texto: n,
+                  titulo: `${NIVEL_DESCRIPCION[n].titulo}: ${NIVEL_DESCRIPCION[n].detalle}`,
+                }))}
+              />
+              <p className="mt-1.5 text-xs text-texto-tenue">
+                {NIVEL_DESCRIPCION[preferencias.nivel].titulo}:{' '}
+                {NIVEL_DESCRIPCION[preferencias.nivel].detalle}
               </p>
-            </fieldset>
+            </div>
           </div>
         )}
       </form>

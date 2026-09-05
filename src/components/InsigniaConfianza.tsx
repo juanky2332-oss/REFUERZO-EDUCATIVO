@@ -1,32 +1,38 @@
+import { Icono, type NombreIcono } from './ui/Icono';
 import { CONFIANZA_ETIQUETA, type Confianza } from '@/lib/types';
 
 /**
  * Indicador de confianza (reglas 33 y 74).
  *
- * Cuatro estados con nombre, nunca un porcentaje: un "97 % de fiabilidad"
+ * Cuatro estados con nombre, nunca un porcentaje: un «97 % de fiabilidad»
  * transmitiría una precisión que el sistema no puede demostrar.
  */
 
-const ESTILO: Record<Confianza, { clases: string; icono: string; explicacion: string }> = {
+const ESTILO: Record<
+  Confianza,
+  { clases: string; icono: NombreIcono; explicacion: string }
+> = {
   verificado: {
     clases: 'bg-exito-suave text-exito border-exito/30',
-    icono: '✓',
+    icono: 'comprobado',
     explicacion: 'Respaldado por una fuente oficial que el sistema ha leído.',
   },
   calculo_comprobado: {
     clases: 'bg-primario-suave text-primario border-primario/30',
-    icono: '=',
+    icono: 'igual',
     explicacion: 'El servidor ha rehecho las operaciones y coinciden.',
   },
   conocimiento_estable: {
     clases: 'bg-neutro-suave text-neutro border-borde-fuerte',
-    icono: '≡',
-    explicacion: 'Contenido científico o matemático asentado, no dependiente de una consulta externa.',
+    icono: 'libro',
+    explicacion:
+      'Contenido científico o matemático asentado, que no depende de una consulta externa.',
   },
   necesita_confirmacion: {
     clases: 'bg-aviso-suave text-aviso border-aviso/40',
-    icono: '!',
-    explicacion: 'Hay algo que no he podido confirmar. Contrasta esta respuesta antes de darla por buena.',
+    icono: 'aviso',
+    explicacion:
+      'Hay algo que no he podido confirmar. Contrasta esta respuesta antes de darla por buena.',
   },
 };
 
@@ -44,7 +50,7 @@ export function InsigniaConfianza({
       <span
         className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${e.clases}`}
       >
-        <span aria-hidden="true">{e.icono}</span>
+        <Icono nombre={e.icono} className="h-3.5 w-3.5" />
         {CONFIANZA_ETIQUETA[confianza]}
       </span>
       {conExplicacion && <span className="text-xs text-texto-tenue">{e.explicacion}</span>}

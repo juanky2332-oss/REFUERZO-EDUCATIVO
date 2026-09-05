@@ -47,6 +47,19 @@ Tres mecanismos lo sostienen, y **ninguno de ellos depende de que el modelo se p
 - **Progreso real** durante la espera: cada paso que se muestra corresponde a una fase que se está
   ejecutando de verdad en el servidor.
 
+### Quiero aprobar el tema (`/aprobar`)
+
+Para cuando hay un examen a la vista. Se indica materia, curso, qué entra, cuántos días faltan y
+qué es lo que peor se lleva, y la aplicación devuelve:
+
+- el **plan repartido en sesiones** de 20-45 minutos, cada una con su objetivo, qué hacer y cómo
+  saber que ha salido bien;
+- **lo que hay que aprender sí o sí**;
+- y, con un clic más, **ejercicios de práctica** y un **simulacro de examen** del mismo tema.
+
+Cada paso es una llamada distinta y sólo se hace si se pide: no se gastan tres generaciones de
+golpe.
+
 ### Crear material (`/material`)
 
 Ejercicios, exámenes, resúmenes, fichas, tests y planes de estudio, con:
@@ -90,7 +103,11 @@ Respuesta en streaming (NDJSON) → interfaz
 | --- | --- |
 | `src/app/page.tsx` | Pantalla de entrada: «¿Qué necesitas?» |
 | `src/app/resolver/` · `src/components/Resolver.tsx` | Conversación multimodal |
+| `src/app/aprobar/` · `src/components/Aprobar.tsx` | Plan de estudio hasta el examen |
 | `src/app/material/` · `src/components/GeneradorMaterial.tsx` | Generador de material |
+| `src/components/ui/` | Iconos SVG y piezas visuales compartidas |
+| `src/lib/config.ts` | Lectura robusta de la configuración del entorno |
+| `src/lib/cliente/preferencias.ts` | Curso, materia y nivel recordados en el navegador |
 | `src/app/api/solve/route.ts` | Pipeline principal, respuesta NDJSON en streaming |
 | `src/app/api/generate/route.ts` | Generación de material |
 | `src/app/api/health/route.ts` | Estado del despliegue (sin datos sensibles) |
@@ -139,6 +156,11 @@ Todas están documentadas en [`.env.example`](.env.example). Las imprescindibles
 | `RATE_LIMIT_GENERATE` | no | `10` | Generaciones por cliente y ventana |
 | `RATE_LIMIT_VENTANA_MS` | no | `60000` | Duración de la ventana |
 
+> **Una variable creada sin valor cuenta como ausente.** En el panel de Vercel es fácil crear una
+> variable vacía; toda la configuración numérica se valida (`src/lib/config.ts`) y cae al valor por
+> defecto documentado en lugar de tomar un cero. Esto llegó a producción una vez: `RATE_LIMIT_SOLVE`
+> vacío valía 0 y el limitador bloqueaba el 100 % de las consultas.
+
 > Los modelos **gpt-5.x, o1, o3 y o4 rechazan `max_tokens`** y una `temperature` distinta de la
 > de por defecto. El cliente lo detecta por el nombre del modelo y usa `max_completion_tokens`;
 > además, si el proveedor rechaza un parámetro concreto, lo elimina y reintenta **una sola vez**.
@@ -153,7 +175,7 @@ npm run verify     # lint + typecheck + tests + build
 
 o por separado: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
 
-### Tests automáticos (60, sin coste de IA)
+### Tests automáticos (81, sin coste de IA)
 
 Cubren lo que no puede fallar en silencio:
 
@@ -253,8 +275,9 @@ Se listan aquí porque conviene saberlas, no porque estén escondidas:
   mediante cálculo», que es lo honesto.
 - **La exportación a PDF usa el diálogo del navegador.** Hay hoja de estilos de impresión, pero no
   generación de PDF en servidor.
-- **Sin perfil persistente.** El nivel y el curso se eligen en cada sesión; no hay seguimiento del
-  aprendizaje entre visitas porque no hay almacenamiento de datos personales.
+- **Sin seguimiento del aprendizaje.** El curso, la materia y el nivel se recuerdan en el navegador
+  (`localStorage`, nunca en un servidor), pero no hay historial de progreso entre visitas ni informes:
+  no se almacena ningún dato personal.
 
 ---
 

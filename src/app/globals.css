@@ -184,3 +184,23 @@ body {
     color: #444;
   }
 }
+
+/* Lavado de color muy suave en la parte alta de la página: da profundidad sin
+   ruido y hace que la cabecera y el contenido se sientan un mismo plano. */
+.lavado {
+  background-image:
+    radial-gradient(60rem 22rem at 12% -6rem, color-mix(in oklab, var(--primario) 13%, transparent), transparent 70%),
+    radial-gradient(46rem 18rem at 88% -8rem, color-mix(in oklab, var(--acento) 9%, transparent), transparent 70%);
+}
+
+/* Respeta la zona segura de los móviles con muesca al fijar la barra inferior. */
+.zona-segura-abajo {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/* Bloques de expresiones y fórmulas dentro de una explicación. */
+.formula {
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  font-size: 0.95em;
+  letter-spacing: -0.01em;
+}

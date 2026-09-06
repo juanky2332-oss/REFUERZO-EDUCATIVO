@@ -39,7 +39,21 @@ export const esquemaAnalisis = z.object({
   bloqueantes: listaTexto,
   // Prudente por defecto: si el modelo no lo dice con claridad, no se resuelve.
   puedeResolverse: z.boolean().catch(false),
+  // Prudente por defecto: ante la duda, pipeline completo con verificación.
+  esSeguimiento: z.boolean().catch(false),
   resumenTarea: texto.catch(''),
+});
+
+/**
+ * Respuesta conversacional corta. `necesitaResolver` es prudente por defecto:
+ * si el modelo no lo declara con claridad, se descarta la vía rápida.
+ */
+export const esquemaRespuestaBreve = z.object({
+  necesitaResolver: z.boolean().catch(true),
+  texto: texto.catch(''),
+  puntos: listaTexto,
+  sugerencias: listaTexto,
+  incertidumbres: listaTexto,
 });
 
 export const esquemaPaso = z.object({

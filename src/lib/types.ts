@@ -87,6 +87,12 @@ export interface Analisis {
   bloqueantes: string[];
   /** true si se puede continuar hacia la resolución. */
   puedeResolverse: boolean;
+  /**
+   * true sólo si la pregunta se responde con lo que YA se explicó en la
+   * conversación previa (repetir un paso, aclarar una palabra) y no exige
+   * resolver nada nuevo. Habilita la vía rápida de una sola llamada.
+   */
+  esSeguimiento: boolean;
   resumenTarea: string;
 }
 
@@ -177,11 +183,27 @@ export interface RespuestaEducativa {
   fuentes: Fuente[];
 }
 
+/**
+ * Respuesta corta de conversación: aclarar algo ya explicado.
+ *
+ * No puede contener resultados nuevos. Si el modelo detecta que para responder
+ * haría falta resolver algo, marca `necesitaResolver` y el servidor descarta
+ * esta respuesta y ejecuta el pipeline completo.
+ */
+export interface RespuestaBreve {
+  necesitaResolver: boolean;
+  texto: string;
+  puntos: string[];
+  sugerencias: string[];
+  incertidumbres: string[];
+}
+
 export type FasePipeline =
   | 'analisis'
   | 'resolucion'
   | 'verificacion'
   | 'explicacion'
+  | 'charla'
   | 'listo';
 
 export const FASE_ETIQUETA: Record<FasePipeline, string> = {
@@ -189,6 +211,7 @@ export const FASE_ETIQUETA: Record<FasePipeline, string> = {
   resolucion: 'Resolviendo el ejercicio…',
   verificacion: 'Comprobando la solución…',
   explicacion: 'Preparando la explicación…',
+  charla: 'Pensando la respuesta…',
   listo: 'Listo',
 };
 
@@ -199,6 +222,7 @@ export type EventoStream =
   | { tipo: 'necesita_datos'; analisis: Analisis; mensaje: string }
   | { tipo: 'comprobaciones'; resultados: ResultadoComprobacionNumerica[] }
   | { tipo: 'respuesta'; respuesta: RespuestaEducativa }
+  | { tipo: 'mensaje'; mensaje: RespuestaBreve; confianza: Confianza }
   | { tipo: 'error'; mensaje: string; codigo: string };
 
 export interface MensajeHistorial {

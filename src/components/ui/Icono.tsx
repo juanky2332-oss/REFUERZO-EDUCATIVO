@@ -27,7 +27,11 @@ export type NombreIcono =
   | 'calendario'
   | 'reiniciar'
   | 'igual'
-  | 'libro';
+  | 'libro'
+  | 'mas'
+  | 'enviar'
+  | 'imagen'
+  | 'chat';
 
 const TRAZOS: Record<NombreIcono, React.ReactNode> = {
   camara: (
@@ -123,6 +127,20 @@ const TRAZOS: Record<NombreIcono, React.ReactNode> = {
     <>
       <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10a3 3 0 0 1 3 3v12a2.5 2.5 0 0 0-2.5-2.5H5.5A1.5 1.5 0 0 1 4 15z" />
       <path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H14a3 3 0 0 0-3 3v12a2.5 2.5 0 0 1 2.5-2.5h5A1.5 1.5 0 0 0 20 15z" />
+    </>
+  ),
+  mas: <path d="M12 5.5v13M5.5 12h13" />,
+  enviar: <path d="M12 19.5V5m0 0-6 6m6-6 6 6" />,
+  imagen: (
+    <>
+      <rect x="3.2" y="4.8" width="17.6" height="14.4" rx="2.4" />
+      <circle cx="8.6" cy="10" r="1.6" />
+      <path d="m4.2 17.4 4.3-4.1a2 2 0 0 1 2.7-.05l3.2 2.9a2 2 0 0 0 2.7-.02l2.7-2.5" />
+    </>
+  ),
+  chat: (
+    <>
+      <path d="M20.5 12.2c0 4-3.8 7.2-8.5 7.2a9.7 9.7 0 0 1-2.6-.35L4.2 20.5l1.3-3.4A6.9 6.9 0 0 1 3.5 12.2C3.5 8.2 7.3 5 12 5s8.5 3.2 8.5 7.2Z" />
     </>
   ),
 };

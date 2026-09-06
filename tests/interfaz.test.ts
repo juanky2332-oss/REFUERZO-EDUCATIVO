@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { PREFERENCIAS_POR_DEFECTO, interpretar } from '@/lib/cliente/preferencias';
-import { esLineaDeFormula, respuestaComoTexto } from '@/components/VistaRespuesta';
-import { sesionesParaPlazo } from '@/components/Aprobar';
+import {
+  empiezaConTodosLosPasos,
+  esLineaDeFormula,
+  pestanasDe,
+  respuestaComoTexto,
+} from '@/components/VistaRespuesta';
+import { historialDe } from '@/components/Chat';
+import { repartirArchivos } from '@/lib/cliente/adjuntos';
+import { sesionesParaPlazo } from '@/lib/material';
 import type { RespuestaEducativa } from '@/lib/types';
 
 describe('preferencias guardadas en el navegador', () => {
@@ -105,5 +112,131 @@ describe('reparto de sesiones de estudio', () => {
       expect(s).toBeGreaterThanOrEqual(1);
       expect(s).toBeLessThanOrEqual(20);
     }
+  });
+});
+
+describe('pestañas de una respuesta', () => {
+  const base: RespuestaEducativa = {
+    titulo: 'Vamos paso a paso',
+    queNosPiden: 'Resolver la ecuación',
+    datos: [],
+    comoLoHacemos: '',
+    pasos: [],
+    resultado: 'x = 4',
+    comprobacion: '3 · 4 + 2 = 14',
+    recuerda: [],
+    correccion: null,
+    ejercicioSimilar: null,
+    preguntaDeSeguimiento: null,
+    confianza: 'calculo_comprobado',
+    incertidumbres: [],
+    fuentes: [],
+  };
+
+  it('no enseña pestañas sin contenido detrás', () => {
+    expect(pestanasDe(base)).toEqual([]);
+  });
+
+  it('la primera pestaña, la que se abre al llegar, siempre tiene contenido', () => {
+    const conPasos = pestanasDe({ ...base, pasos: [{ titulo: 'Restar 2', contenido: '3x = 12' }] });
+    expect(conPasos[0].clave).toBe('pasos');
+    expect(conPasos[0].contador).toBe(1);
+
+    const soloRepaso = pestanasDe({ ...base, recuerda: ['Operaciones inversas'] });
+    expect(soloRepaso[0].clave).toBe('repaso');
+  });
+
+  it('la comprobación nunca se esconde detrás de una pestaña', () => {
+    const claves = pestanasDe({ ...base, comprobacion: 'Sustituyo x = 4' }).map((p) => p.clave);
+    expect(claves).not.toContain('comprobacion');
+  });
+
+  it('con pocos pasos se enseñan todos y con muchos se navega de uno en uno', () => {
+    expect(empiezaConTodosLosPasos(3)).toBe(true);
+    expect(empiezaConTodosLosPasos(4)).toBe(false);
+  });
+});
+
+describe('historial que viaja al servidor', () => {
+  it('resume la respuesta en vez de mandarla entera', () => {
+    const h = historialDe([
+      { tipo: 'usuario', id: '1', texto: 'Resuelve 3x + 2 = 14', miniaturas: [] },
+      {
+        tipo: 'respuesta',
+        id: '2',
+        respuesta: {
+          titulo: 'Ecuación',
+          queNosPiden: 'Hallar x',
+          datos: [],
+          comoLoHacemos: '',
+          pasos: [{ titulo: 'Restar 2', contenido: 'texto largo que no debe viajar entero' }],
+          resultado: 'x = 4',
+          comprobacion: '',
+          recuerda: [],
+          correccion: null,
+          ejercicioSimilar: null,
+          preguntaDeSeguimiento: null,
+          confianza: 'calculo_comprobado',
+          incertidumbres: [],
+          fuentes: [],
+        },
+      },
+    ]);
+
+    expect(h).toHaveLength(2);
+    expect(h[1].rol).toBe('asistente');
+    expect(h[1].texto).toContain('Resultado: x = 4');
+    expect(h[1].texto).not.toContain('texto largo que no debe viajar entero');
+  });
+
+  it('un mensaje sin texto se anuncia como foto, para que no llegue vacío', () => {
+    const h = historialDe([{ tipo: 'usuario', id: '1', texto: '', miniaturas: ['data:,'] }]);
+    expect(h[0].texto).toBe('(envió una foto)');
+  });
+
+  it('el material generado no arrastra la conversación', () => {
+    const h = historialDe([
+      { tipo: 'usuario', id: '1', texto: 'Hola', miniaturas: [] },
+      {
+        tipo: 'material',
+        id: '2',
+        material: {
+          titulo: 'Ficha',
+          materia: 'matematicas',
+          curso: '1eso',
+          tema: 'Fracciones',
+          instrucciones: '',
+          duracionMinutos: null,
+          preguntas: [{ numero: 1, enunciado: 'Suma', puntuacion: 1, solucion: '', criterioCorreccion: '' }],
+          loQueHayQueAprender: [],
+          notasDidacticas: [],
+        },
+      },
+    ]);
+    expect(h).toHaveLength(1);
+  });
+
+  it('no manda más de ocho turnos', () => {
+    const muchas = Array.from({ length: 20 }, (_, i) => ({
+      tipo: 'usuario' as const,
+      id: String(i),
+      texto: `mensaje ${i}`,
+      miniaturas: [],
+    }));
+    expect(historialDe(muchas)).toHaveLength(8);
+  });
+});
+
+describe('reparto de fotos adjuntas', () => {
+  it('acepta lo que cabe y lo dice cuando recorta', () => {
+    expect(repartirArchivos(0, 2)).toEqual({ cabe: 2, aviso: null });
+    expect(repartirArchivos(3, 3).cabe).toBe(1);
+    expect(repartirArchivos(3, 3).aviso).toContain('Sólo he cogido 1');
+  });
+
+  it('con la lista llena no acepta ninguna y avisa', () => {
+    const r = repartirArchivos(4, 1);
+    expect(r.cabe).toBe(0);
+    expect(r.aviso).toContain('máximo 4 fotos');
   });
 });

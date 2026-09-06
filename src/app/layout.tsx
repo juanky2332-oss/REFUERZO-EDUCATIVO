@@ -28,8 +28,12 @@ export const viewport: Viewport = {
   ],
 };
 
+/**
+ * Sólo lo que no cabe en la conversación: las dos pantallas pensadas para
+ * imprimir en papel. Preguntar, mandar una foto o pedir material se hace desde
+ * el propio chat, así que no hay pestañas para eso.
+ */
 const NAVEGACION = [
-  { href: '/resolver', texto: 'Resolver' },
   { href: '/aprobar', texto: 'Aprobar' },
   { href: '/material', texto: 'Material' },
 ];
@@ -37,7 +41,13 @@ const NAVEGACION = [
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" className={`${inter.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">
+      {/*
+        `h-dvh` y no `min-h`: la conversación tiene que ocupar exactamente la
+        pantalla para poder desplazarse por dentro y dejar la barra de escritura
+        siempre a la vista. Las páginas que sí son un documento largo se
+        desplazan en su propio contenedor.
+      */}
+      <body className="flex h-dvh flex-col overflow-hidden print:h-auto print:overflow-visible">
         <a className="saltar-al-contenido" href="#contenido">
           Saltar al contenido
         </a>
@@ -75,23 +85,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
 
-        <main id="contenido" className="flex-1">
+        <main
+          id="contenido"
+          className="flex min-h-0 flex-1 flex-col print:min-h-0 print:overflow-visible"
+        >
           {children}
         </main>
 
-        <footer className="no-imprimir border-t border-borde bg-superficie">
-          <div className="mx-auto max-w-5xl px-4 py-6 text-xs leading-relaxed text-texto-tenue">
-            <p>
-              Herramienta de apoyo al estudio. Comprueba las operaciones en el servidor y avisa
-              cuando no puede confirmar algo, pero <strong>no sustituye a tu profesorado</strong>:
-              si una respuesta aparece marcada como &laquo;necesita confirmación&raquo;, contrástala.
-            </p>
-            <p className="mt-2">
-              No se guardan las fotos ni las conversaciones: se procesan para responderte y se
-              descartan.
-            </p>
-          </div>
-        </footer>
       </body>
     </html>
   );

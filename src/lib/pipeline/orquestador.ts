@@ -20,11 +20,13 @@ import {
   SYSTEM_ANALISIS,
   SYSTEM_RESOLUCION,
   SYSTEM_VERIFICACION,
+  systemCharla,
   systemExplicacion,
 } from '@/lib/ai/prompts/fases';
 import {
   esquemaAnalisis,
   esquemaResolucion,
+  esquemaRespuestaBreve,
   esquemaRespuestaEducativa,
   esquemaVerificacion,
   type PeticionSolve,
@@ -51,6 +53,7 @@ import {
   type Confianza,
   type EventoStream,
   type Fuente,
+  type RespuestaBreve,
   type RespuestaEducativa,
   type ResultadoComprobacionNumerica,
   type Verificacion,
@@ -61,6 +64,31 @@ const MAX_TOKENS_ANALISIS = 2500;
 const MAX_TOKENS_RESOLUCION = 3500;
 const MAX_TOKENS_VERIFICACION = 2000;
 const MAX_TOKENS_EXPLICACION = 4000;
+const MAX_TOKENS_CHARLA = 900;
+
+/**
+ * Confianza de una respuesta de la vía rápida.
+ *
+ * Nunca puede ser "verificado" ni "calculo_comprobado": en esta vía no se ha
+ * recalculado nada, sólo se ha reformulado algo ya explicado.
+ */
+export function confianzaDeCharla(mensaje: RespuestaBreve): Confianza {
+  return mensaje.incertidumbres.length > 0 ? 'necesita_confirmacion' : 'conocimiento_estable';
+}
+
+/**
+ * Decide si una consulta puede ir por la vía rápida de conversación.
+ *
+ * Las tres condiciones son necesarias: sin conversación previa no hay nada que
+ * aclarar, y una imagen nueva siempre es material que hay que leer y verificar.
+ */
+export function admiteViaRapida(params: {
+  esSeguimiento: boolean;
+  mensajesPrevios: number;
+  imagenes: number;
+}): boolean {
+  return params.esSeguimiento && params.mensajesPrevios > 0 && params.imagenes === 0;
+}
 
 /**
  * Decide la confianza que se muestra al usuario.
@@ -102,7 +130,14 @@ export function calcularConfianza(params: {
       'La revisión no ha podido confirmar la solución, así que tómala como una propuesta y contrástala.',
     );
   }
-  for (const e of verificacion.errores) incertidumbres.push(e);
+  // Los fallos que apunta el revisor sólo son una advertencia sobre NUESTRA
+  // respuesta si el revisor no la ha dado por buena. Cuando el veredicto es
+  // "correcta", lo que lista suele ser el error del alumno, que ya se le explica
+  // en la corrección: repetirlo arriba en amarillo gasta el aviso justo cuando
+  // no hace falta, y el día que sí haya un problema de verdad ya no se lee.
+  if (verificacion.veredicto !== 'correcta') {
+    for (const e of verificacion.errores) incertidumbres.push(e);
+  }
 
   let confianza: Confianza;
 
@@ -288,6 +323,61 @@ export async function* ejecutarPipeline(
       return;
     }
 
+    // --- Vía rápida: aclarar algo ya explicado -------------------------------
+    // Dos llamadas en vez de cuatro. Sólo se acepta si el propio modelo confirma
+    // que no hace falta resolver nada; en caso contrario se cae al pipeline.
+    if (
+      admiteViaRapida({
+        esSeguimiento: analisis.esSeguimiento,
+        mensajesPrevios: peticion.historial.length,
+        imagenes: imagenes.length,
+      })
+    ) {
+      yield { tipo: 'fase', fase: 'charla', estado: 'inicio', etiqueta: FASE_ETIQUETA.charla };
+
+      const { valor: breve, ms: msCharla } = await pedirJSON(
+        {
+          system: [systemCharla(peticion.nivel), contexto].join('\n\n'),
+          mensajes: [
+            {
+              rol: 'user',
+              partes: [
+                {
+                  tipo: 'texto',
+                  texto: [
+                    bloqueHistorial(peticion, nonce),
+                    'Lo que pregunta ahora el alumno:',
+                    envolverNoConfiable('texto_usuario', textoUsuario, nonce),
+                  ]
+                    .filter(Boolean)
+                    .join('\n\n'),
+                },
+              ],
+            },
+          ],
+          maxTokens: MAX_TOKENS_CHARLA,
+          etiqueta: 'charla',
+        },
+        esquemaRespuestaBreve,
+      );
+
+      registro.info({
+        evento: 'fase_completada',
+        fase: 'charla',
+        ms: msCharla,
+        datos: { aceptada: !breve.necesitaResolver && breve.texto.length > 0 },
+      });
+
+      yield { tipo: 'fase', fase: 'charla', estado: 'fin', etiqueta: FASE_ETIQUETA.charla };
+
+      if (!breve.necesitaResolver && breve.texto.trim()) {
+        yield { tipo: 'mensaje', mensaje: breve, confianza: confianzaDeCharla(breve) };
+        return;
+      }
+      // Si hace falta resolver, se sigue con el pipeline completo sin avisar al
+      // alumno: para él es la misma pregunta, sólo tarda un poco más.
+    }
+
     // --- Desvío: falta información para resolver -----------------------------
     if (!analisis.puedeResolverse || analisis.bloqueantes.length > 0) {
       const motivos = [
@@ -307,6 +397,13 @@ export async function* ejecutarPipeline(
     // --- FASE 2: RESOLUCIÓN --------------------------------------------------
     yield { tipo: 'fase', fase: 'resolucion', estado: 'inicio', etiqueta: FASE_ETIQUETA.resolucion };
 
+    // El analizador a veces mete el desarrollo del alumno en "datos". Si eso
+    // pasa y nadie avisa, el resolutor lo toma por bueno y el corrector no
+    // llega a dispararse: el alumno se va con su error confirmado.
+    const pideCorreccion = analisis.intencion === 'corregir';
+    const trabajoSinIdentificar =
+      pideCorreccion && !analisis.respuestaDelAlumno && analisis.datos.length > 0;
+
     const resumenAnalisis = [
       `Materia detectada: ${analisis.materia}. Curso detectado: ${analisis.curso}.`,
       `Tarea: ${analisis.resumenTarea}`,
@@ -321,6 +418,12 @@ export async function* ejecutarPipeline(
         ? `Lecturas dudosas (usa la principal y no la des por segura): ${analisis.ambiguedades
             .map((a) => `${a.fragmento}: ${a.lecturaPrincipal} o ${a.lecturaAlternativa}`)
             .join(' | ')}`
+        : '',
+      pideCorreccion
+        ? 'AVISO: el alumno pide que le corrijas lo que ha hecho. La respuesta final DEBE incluir la corrección.'
+        : '',
+      trabajoSinIdentificar
+        ? 'AVISO: no se ha aislado la respuesta del alumno, así que puede estar mezclada dentro de los datos detectados. Los elementos que sean cuentas, despejes o resultados son trabajo suyo y pueden estar mal: NO los des por buenos. Resuelve desde el enunciado y compáralos.'
         : '',
     ]
       .filter(Boolean)

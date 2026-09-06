@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { GeneradorMaterial } from '@/components/GeneradorMaterial';
+import { Documento } from '@/components/ui/Documento';
 
 export const metadata: Metadata = {
   title: 'Crear material',
@@ -14,5 +15,9 @@ export default async function PaginaMaterial({
   searchParams: Promise<{ tipo?: string | string[] }>;
 }) {
   const { tipo } = await searchParams;
-  return <GeneradorMaterial tipoInicial={typeof tipo === 'string' ? tipo : null} />;
+  return (
+    <Documento>
+      <GeneradorMaterial tipoInicial={typeof tipo === 'string' ? tipo : null} />
+    </Documento>
+  );
 }

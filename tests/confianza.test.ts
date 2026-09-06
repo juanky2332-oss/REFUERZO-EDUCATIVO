@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calcularConfianza } from '@/lib/pipeline/orquestador';
+import { admiteViaRapida, calcularConfianza, confianzaDeCharla } from '@/lib/pipeline/orquestador';
 import { comprobar, comprobarLista } from '@/lib/pipeline/comprobar';
 import type { Analisis, Verificacion } from '@/lib/types';
 
@@ -20,6 +20,7 @@ const analisisLimpio: Analisis = {
   ambiguedades: [],
   bloqueantes: [],
   puedeResolverse: true,
+  esSeguimiento: false,
   resumenTarea: 'Resolver una ecuación de primer grado.',
 };
 
@@ -212,5 +213,89 @@ describe('cálculo de la confianza mostrada', () => {
       hayFuentes: false,
     });
     expect(incertidumbres.filter((i) => i === 'Falta una unidad')).toHaveLength(1);
+  });
+});
+
+describe('avisos que vienen del revisor', () => {
+  it('un fallo señalado con veredicto dudoso llega al alumno', () => {
+    const { incertidumbres } = calcularConfianza({
+      verificacion: {
+        ...verificacionCorrecta,
+        veredicto: 'dudosa',
+        errores: ['No se ha convertido la unidad'],
+      },
+      comprobaciones: [],
+      analisis: analisisLimpio,
+      hayFuentes: false,
+    });
+    expect(incertidumbres).toContain('No se ha convertido la unidad');
+  });
+
+  it('con la solución dada por buena, el fallo del alumno no se convierte en aviso', () => {
+    const { incertidumbres } = calcularConfianza({
+      verificacion: {
+        ...verificacionCorrecta,
+        veredicto: 'correcta',
+        errores: ['El alumno ha puesto 8 m/s en vez de 22,22 m/s'],
+      },
+      comprobaciones: [],
+      analisis: analisisLimpio,
+      hayFuentes: false,
+    });
+    expect(incertidumbres).toEqual([]);
+  });
+
+  it('un resultado corregido sí se avisa', () => {
+    const { incertidumbres } = calcularConfianza({
+      verificacion: {
+        ...verificacionCorrecta,
+        veredicto: 'corregida',
+        errores: ['El resultado propuesto estaba mal redondeado'],
+      },
+      comprobaciones: [],
+      analisis: analisisLimpio,
+      hayFuentes: false,
+    });
+    expect(incertidumbres).toContain('El resultado propuesto estaba mal redondeado');
+  });
+});
+
+describe('vía rápida de conversación', () => {
+  it('sólo se usa para aclarar algo ya explicado y sin fotos nuevas', () => {
+    expect(admiteViaRapida({ esSeguimiento: true, mensajesPrevios: 2, imagenes: 0 })).toBe(true);
+  });
+
+  it('una foto nueva siempre pasa por el pipeline completo', () => {
+    expect(admiteViaRapida({ esSeguimiento: true, mensajesPrevios: 2, imagenes: 1 })).toBe(false);
+  });
+
+  it('sin conversación previa no hay nada que aclarar', () => {
+    expect(admiteViaRapida({ esSeguimiento: true, mensajesPrevios: 0, imagenes: 0 })).toBe(false);
+  });
+
+  it('si el analizador no lo marca como seguimiento, se resuelve y se verifica', () => {
+    expect(admiteViaRapida({ esSeguimiento: false, mensajesPrevios: 5, imagenes: 0 })).toBe(false);
+  });
+
+  it('nunca presume de cálculo comprobado: ahí no se ha recalculado nada', () => {
+    const limpia = confianzaDeCharla({
+      necesitaResolver: false,
+      texto: 'Restar 2 deja 3x = 12.',
+      puntos: [],
+      sugerencias: [],
+      incertidumbres: [],
+    });
+    expect(limpia).toBe('conocimiento_estable');
+  });
+
+  it('cualquier duda declarada la degrada', () => {
+    const dudosa = confianzaDeCharla({
+      necesitaResolver: false,
+      texto: 'Creo que se refiere al segundo apartado.',
+      puntos: [],
+      sugerencias: [],
+      incertidumbres: ['No estoy seguro de a qué apartado te refieres.'],
+    });
+    expect(dudosa).toBe('necesita_confirmacion');
   });
 });

@@ -6,6 +6,7 @@ import { Icono } from './ui/Icono';
 import { Boton, Segmentado, Tarjeta, TituloSeccion } from './ui/primitivos';
 import type { MaterialGenerado } from '@/lib/ai/schemas';
 import { generarMaterial } from '@/lib/cliente/generar';
+import { cursoConcreto, materiaConcreta, sesionesParaPlazo } from '@/lib/material';
 import { usePreferencias } from '@/lib/cliente/preferencias';
 import { TEMAS_ORIENTATIVOS } from '@/lib/curriculum';
 import { NIVELES, NIVEL_DESCRIPCION, type Curso, type Materia } from '@/lib/types';
@@ -29,20 +30,6 @@ const CURSOS_ELEGIBLES: { valor: Curso; etiqueta: string }[] = [
   { valor: '1eso', etiqueta: '1.º de ESO' },
   { valor: '2eso', etiqueta: '2.º de ESO' },
 ];
-
-/** Sesiones razonables para el plazo disponible, sin agobiar. */
-export function sesionesParaPlazo(dias: number): number {
-  if (dias <= 2) return 3;
-  if (dias <= 5) return dias + 1;
-  return Math.min(10, Math.round(dias / 1.5));
-}
-
-function materiaConcreta(m: Materia): Materia {
-  return m === 'desconocida' || m === 'otra' ? 'matematicas' : m;
-}
-function cursoConcreto(c: Curso): Curso {
-  return c === 'desconocido' || c === 'otro' ? '1eso' : c;
-}
 
 type Extra = 'ejercicios' | 'examen';
 

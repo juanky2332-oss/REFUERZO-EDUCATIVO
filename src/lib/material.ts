@@ -8,6 +8,7 @@
  */
 
 import type { MaterialGenerado, PreguntaMaterial } from '@/lib/ai/schemas';
+import type { Curso, Materia } from '@/lib/types';
 
 export type PreguntaAlumno = Omit<PreguntaMaterial, 'solucion' | 'criterioCorreccion'>;
 
@@ -45,4 +46,27 @@ export function paraAlumno(material: MaterialGenerado): MaterialAlumno {
 
 export function puntuacionTotal(material: MaterialGenerado): number {
   return Math.round(material.preguntas.reduce((s, p) => s + p.puntuacion, 0) * 100) / 100;
+}
+
+// --- Ajustes de una petición de material --------------------------------------
+
+/**
+ * Sesiones razonables para el plazo disponible, sin agobiar.
+ *
+ * Un plan de veinte sesiones para un examen dentro de tres días no se cumple:
+ * se abandona. El tope existe por eso, no por límites de la API.
+ */
+export function sesionesParaPlazo(dias: number): number {
+  if (dias <= 2) return 3;
+  if (dias <= 5) return dias + 1;
+  return Math.min(10, Math.round(dias / 1.5));
+}
+
+/** El generador exige materia y curso concretos; «no lo sé» no le vale. */
+export function materiaConcreta(m: Materia): Materia {
+  return m === 'desconocida' || m === 'otra' ? 'matematicas' : m;
+}
+
+export function cursoConcreto(c: Curso): Curso {
+  return c === 'desconocido' || c === 'otro' ? '1eso' : c;
 }

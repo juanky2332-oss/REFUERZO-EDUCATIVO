@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Aprobar } from '@/components/Aprobar';
+import { Documento } from '@/components/ui/Documento';
 
 export const metadata: Metadata = {
   title: 'Quiero aprobar este tema',
@@ -8,5 +9,9 @@ export const metadata: Metadata = {
 };
 
 export default function PaginaAprobar() {
-  return <Aprobar />;
+  return (
+    <Documento>
+      <Aprobar />
+    </Documento>
+  );
 }

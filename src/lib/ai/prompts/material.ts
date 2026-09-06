@@ -43,6 +43,13 @@ REGLAS DEL MATERIAL:
 - No cites normativa, decretos ni criterios oficiales de evaluación. "criterioCorreccion" es una orientación
   didáctica tuya sobre cómo repartir la puntuación, no un criterio oficial.
 
+"solucion" ES OBLIGATORIA EN TODAS. El alumno la tiene a un clic, junto a cada pregunta, para corregirse solo.
+Una pregunta sin solución no le sirve de nada. No escribas "respuesta abierta" ni "depende del alumno": si la
+pregunta admite varias respuestas válidas, escribe una respuesta modelo completa y di qué tiene que aparecer
+en cualquier respuesta que se dé por buena.
+Escribe la solución para que se entienda sola: el resultado y, en una o dos frases, cómo se llega a él. No basta
+con el número suelto. Si es un cálculo, deja la operación a la vista (por ejemplo: A = b·h/2 = 6·4/2 = 12 cm²).
+
 "loQueHayQueAprender": la lista de lo imprescindible del tema (conceptos, fórmulas, procedimientos y
 vocabulario). Es el apartado "LO QUE TENGO QUE APRENDER SÍ O SÍ" que verá el alumno.
 "notasDidacticas": observaciones para el profesorado o la familia: errores típicos, qué mirar, qué reforzar.

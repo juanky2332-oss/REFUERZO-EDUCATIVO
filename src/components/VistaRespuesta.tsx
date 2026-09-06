@@ -91,6 +91,9 @@ export function Texto({ children, className = '' }: { children: string; classNam
 /** Versión en texto plano, para copiar al cuaderno o a un mensaje. */
 export function respuestaComoTexto(r: RespuestaEducativa): string {
   const partes = [r.titulo, ''];
+  if (r.correccionDelMaterial) {
+    partes.push('CORRIJO LO QUE TE PUSE EN LA FICHA', r.correccionDelMaterial, '');
+  }
   if (r.incertidumbres.length > 0) {
     partes.push('OJO:', ...r.incertidumbres.map((i) => `- ${i}`), '');
   }
@@ -308,6 +311,22 @@ export function VistaRespuesta({ respuesta }: { respuesta: RespuestaEducativa })
           <p className="mt-1 text-sm leading-snug text-texto-suave">{respuesta.queNosPiden}</p>
         )}
       </header>
+
+      {/*
+        La ficha le enseñó otro resultado. Es lo primero que hay que aclararle:
+        si no, se queda con dos números distintos y sin saber cuál copiar.
+      */}
+      {respuesta.correccionDelMaterial && (
+        <div className="border-b border-primario/30 bg-primario-suave px-4 py-3 sm:px-5" role="note">
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-primario">
+            <Icono nombre="reiniciar" className="h-4 w-4 shrink-0" />
+            Corrijo lo que te puse en la ficha
+          </p>
+          <Texto className="mt-1 text-sm text-texto-suave">
+            {respuesta.correccionDelMaterial}
+          </Texto>
+        </div>
+      )}
 
       {/* Lo que no se ha podido confirmar. Fuera de las pestañas a propósito. */}
       {respuesta.incertidumbres.length > 0 && (

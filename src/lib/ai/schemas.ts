@@ -79,6 +79,7 @@ export const esquemaResolucion = z.object({
   comprobacionesNumericas: z.array(esquemaComprobacionNumerica).catch([]),
   unidades: texto.nullable().catch(null),
   advertencias: listaTexto,
+  discrepanciaConMaterial: texto.nullable().catch(null),
 });
 
 export const esquemaVerificacion = z.object({
@@ -157,8 +158,26 @@ export const esquemaImagenEntrante = z.object({
   nombre: z.string().optional(),
 });
 
+/**
+ * Ejercicio del que viene la consulta, cuando el alumno pregunta desde una
+ * pregunta concreta de un material generado aquí.
+ *
+ * Llega del navegador, así que se trata como contenido no confiable igual que
+ * todo lo demás; lo que aporta es el marco: el motor sabe que esa solución la
+ * escribió él en otra llamada y que su trabajo ahora es rehacerla, no repetirla.
+ */
+export const esquemaEjercicioDeMaterial = z.object({
+  titulo: z.string().max(300).default(''),
+  numero: z.number().int().positive().nullable().default(null),
+  enunciado: z.string().max(4000),
+  solucionPropuesta: z.string().max(4000).default(''),
+});
+
+export type EjercicioDeMaterial = z.infer<typeof esquemaEjercicioDeMaterial>;
+
 export const esquemaPeticionSolve = z.object({
   texto: z.string().max(8000).optional().default(''),
+  ejercicio: esquemaEjercicioDeMaterial.nullable().optional().default(null),
   imagenes: z.array(esquemaImagenEntrante).max(4).optional().default([]),
   nivel: z.enum(['A', 'B', 'C', 'D']).optional().default('B'),
   curso: z.enum(CURSOS).optional().default('desconocido'),

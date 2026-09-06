@@ -6,7 +6,9 @@ import {
   pestanasDe,
   respuestaComoTexto,
 } from '@/components/VistaRespuesta';
-import { historialDe } from '@/components/Chat';
+import { NOMBRE_HERRAMIENTA, historialDe, siguientesPasos } from '@/components/Chat';
+import { vocabularioDe } from '@/components/VistaMaterial';
+import type { MaterialGenerado } from '@/lib/ai/schemas';
 import { repartirArchivos } from '@/lib/cliente/adjuntos';
 import { sesionesParaPlazo } from '@/lib/material';
 import type { RespuestaEducativa } from '@/lib/types';
@@ -78,6 +80,7 @@ describe('exportación de la respuesta a texto plano', () => {
     confianza: 'calculo_comprobado',
     incertidumbres: [],
     fuentes: [],
+    correccionDelMaterial: null,
   };
 
   it('incluye el procedimiento completo', () => {
@@ -131,6 +134,7 @@ describe('pestañas de una respuesta', () => {
     confianza: 'calculo_comprobado',
     incertidumbres: [],
     fuentes: [],
+    correccionDelMaterial: null,
   };
 
   it('no enseña pestañas sin contenido detrás', () => {
@@ -179,6 +183,7 @@ describe('historial que viaja al servidor', () => {
           confianza: 'calculo_comprobado',
           incertidumbres: [],
           fuentes: [],
+          correccionDelMaterial: null,
         },
       },
     ]);
@@ -200,6 +205,14 @@ describe('historial que viaja al servidor', () => {
       {
         tipo: 'material',
         id: '2',
+        peticion: {
+          tipo: 'ejercicios',
+          materia: 'matematicas',
+          curso: '1eso',
+          tema: 'Fracciones',
+          cantidad: 6,
+          dias: null,
+        },
         material: {
           titulo: 'Ficha',
           materia: 'matematicas',
@@ -238,5 +251,99 @@ describe('reparto de fotos adjuntas', () => {
     const r = repartirArchivos(4, 1);
     expect(r.cabe).toBe(0);
     expect(r.aviso).toContain('máximo 4 fotos');
+  });
+});
+
+describe('cómo se llama cada cosa en el material', () => {
+  const base: MaterialGenerado = {
+    titulo: 'Práctica de fracciones',
+    materia: 'matematicas',
+    curso: '1eso',
+    tema: 'Fracciones',
+    instrucciones: '',
+    duracionMinutos: null,
+    preguntas: [
+      { numero: 1, enunciado: 'Suma 1/2 + 1/4', puntuacion: 2, solucion: '3/4', criterioCorreccion: '' },
+    ],
+    loQueHayQueAprender: [],
+    notasDidacticas: [],
+  };
+
+  it('en un examen o unos ejercicios se habla de preguntas y de solución', () => {
+    const v = vocabularioDe(base);
+    expect(v.esCuestionario).toBe(true);
+    expect(v.elemento).toBe('pregunta');
+    expect(v.verRespuesta).toBe('Ver solución');
+    expect(v.verTodas).toBe('Ver todas las soluciones');
+  });
+
+  it('un plan de estudio tiene sesiones, no preguntas con solución', () => {
+    const v = vocabularioDe({
+      ...base,
+      titulo: 'Plan de estudio para el examen',
+      preguntas: base.preguntas.map((p) => ({ ...p, puntuacion: 0 })),
+    });
+    expect(v.esCuestionario).toBe(false);
+    expect(v.elemento).toBe('sesión');
+    expect(v.respuesta).not.toMatch(/soluci/i);
+  });
+
+  it('un resumen tiene apartados con contenido', () => {
+    const v = vocabularioDe({
+      ...base,
+      titulo: 'Resumen del tema',
+      preguntas: base.preguntas.map((p) => ({ ...p, puntuacion: 0 })),
+    });
+    expect(v.elemento).toBe('apartado');
+    expect(v.esCuestionario).toBe(false);
+  });
+});
+
+describe('el plural del botón «ver todas» está escrito, no fabricado', () => {
+  const base: MaterialGenerado = {
+    titulo: 'Práctica',
+    materia: 'matematicas',
+    curso: '1eso',
+    tema: 'Fracciones',
+    instrucciones: '',
+    duracionMinutos: null,
+    preguntas: [
+      { numero: 1, enunciado: 'Suma', puntuacion: 1, solucion: '3/4', criterioCorreccion: '' },
+    ],
+    loQueHayQueAprender: [],
+    notasDidacticas: [],
+  };
+
+  it('ningún tipo de material produce un plural inventado', () => {
+    const variantes = [
+      base,
+      { ...base, titulo: 'Plan de estudio', preguntas: base.preguntas.map((p) => ({ ...p, puntuacion: 0 })) },
+      { ...base, titulo: 'Resumen', preguntas: base.preguntas.map((p) => ({ ...p, puntuacion: 0 })) },
+    ];
+    for (const m of variantes) {
+      const v = vocabularioDe(m);
+      expect(v.verTodas).not.toMatch(/ns|óns/);
+      expect(v.verTodas.length).toBeLessThan(40);
+    }
+  });
+});
+
+describe('qué se ofrece después de cada material', () => {
+  it('un plan de estudio no se queda en buenas intenciones', () => {
+    expect(siguientesPasos('plan_estudio')).toEqual(['ejercicios', 'examen']);
+  });
+
+  it('nunca se ofrece repetir lo que se acaba de generar', () => {
+    for (const tipo of ['ejercicios', 'examen', 'resumen', 'plan_estudio'] as const) {
+      expect(siguientesPasos(tipo)).not.toContain(tipo);
+    }
+  });
+
+  it('todo lo que se ofrece tiene un nombre que enseñar en el botón', () => {
+    for (const tipo of ['ejercicios', 'examen', 'resumen', 'plan_estudio'] as const) {
+      for (const siguiente of siguientesPasos(tipo)) {
+        expect(NOMBRE_HERRAMIENTA[siguiente]).toBeTruthy();
+      }
+    }
   });
 });

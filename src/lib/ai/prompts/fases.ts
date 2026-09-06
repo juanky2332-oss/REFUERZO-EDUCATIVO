@@ -115,8 +115,15 @@ ESQUEMA JSON EXACTO:
   "comprobacion": string,
   "comprobacionesNumericas": [{ "descripcion": string, "expresion": string, "valorEsperado": number, "tolerancia": number }],
   "unidades": string | null,
-  "advertencias": string[]
-}`;
+  "advertencias": string[],
+  "discrepanciaConMaterial": string | null
+}
+
+"discrepanciaConMaterial": rellénalo SÓLO si en el contexto venía un ejercicio de un material con una solución ya
+enseñada al alumno Y tu resultado no coincide con ella. Escribe entonces, dirigiéndote al alumno de tú, qué decía
+esa solución, qué sale en realidad y en qué paso concreto se torció. Ejemplo: "En la ficha te puse x = 4, y está
+mal: al dividir 20 entre 2 sale 10, no 4. Quédate con x = 10." Si coinciden, o si la consulta no venía de un
+material, es null. No lo uses para matices de redacción: sólo cuando el resultado sea distinto.`;
 
 // --- FASE 3: verificación independiente --------------------------------------
 

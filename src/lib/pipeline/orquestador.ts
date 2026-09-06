@@ -173,6 +173,44 @@ function partesDeImagenes(peticion: PeticionSolve): {
   return { partes, rechazadas };
 }
 
+/**
+ * Marco de un ejercicio que ha salido de un material generado por esta misma
+ * herramienta.
+ *
+ * La instrucción va aquí, en texto del sistema, y el contenido va envuelto como
+ * no confiable: viene del navegador. Lo importante es la orden que lo acompaña.
+ * Esa solución la escribió el generador en otra llamada, sin verificación
+ * aritmética ni revisor, así que es justo lo que hay que volver a comprobar: si
+ * está mal y la damos por buena, el alumno se estudia el error.
+ */
+export function bloqueEjercicioDeMaterial(
+  ejercicio: PeticionSolve['ejercicio'],
+  nonce: string,
+): string {
+  if (!ejercicio) return '';
+
+  const cabecera = ejercicio.numero
+    ? `El alumno pregunta por la pregunta ${ejercicio.numero} de un material («${ejercicio.titulo}») generado por esta misma herramienta.`
+    : 'El alumno pregunta por un ejercicio de un material generado por esta misma herramienta.';
+
+  return [
+    cabecera,
+    'La solución que se le enseñó junto al enunciado NO es fiable: la escribió otro proceso sin recalcularla.',
+    'Resuelve el ejercicio POR TU CUENTA desde el enunciado. Si tu resultado no coincide con esa solución,',
+    'dilo de forma explícita en las advertencias y quédate con el tuyo, que sí pasa por la comprobación.',
+    envolverNoConfiable(
+      'ejercicio_del_material',
+      [
+        `ENUNCIADO: ${ejercicio.enunciado}`,
+        ejercicio.solucionPropuesta
+          ? `SOLUCIÓN QUE SE LE ENSEÑÓ (a verificar): ${ejercicio.solucionPropuesta}`
+          : 'No se le enseñó ninguna solución.',
+      ].join('\n'),
+      nonce,
+    ),
+  ].join('\n');
+}
+
 function bloqueHistorial(peticion: PeticionSolve, nonce: string): string {
   if (peticion.historial.length === 0) return '';
   const texto = peticion.historial
@@ -239,6 +277,9 @@ export async function* ejecutarPipeline(
         texto: `Nota del sistema: ${rechazadas.length} archivo(s) fueron rechazados por el validador y no se han incluido.`,
       });
     }
+    const marcoEjercicio = bloqueEjercicioDeMaterial(peticion.ejercicio, nonce);
+    if (marcoEjercicio) partesAnalisis.push({ tipo: 'texto', texto: marcoEjercicio });
+
     partesAnalisis.push({
       tipo: 'texto',
       texto: bloqueHistorial(peticion, nonce) || 'No hay conversación previa.',
@@ -318,6 +359,7 @@ export async function* ejecutarPipeline(
             'No dispongo de una fuente oficial verificada para esta pregunta en este momento.',
           ],
           fuentes: [],
+          correccionDelMaterial: null,
         },
       };
       return;
@@ -430,6 +472,9 @@ export async function* ejecutarPipeline(
       .join('\n\n');
 
     const partesResolucion: ParteMensaje[] = [{ tipo: 'texto', texto: resumenAnalisis }];
+    // El marco del material también aquí: es en esta fase donde se decide si la
+    // solución que se le enseñó al alumno se sostiene o no.
+    if (marcoEjercicio) partesResolucion.push({ tipo: 'texto', texto: marcoEjercicio });
     // Las imágenes se vuelven a adjuntar aquí porque una transcripción puede
     // perder matices visuales (gráficos, tablas, exponentes). No se adjuntan en
     // la verificación, que trabaja sobre la transcripción ya fijada.
@@ -578,6 +623,9 @@ export async function* ejecutarPipeline(
       confianza,
       incertidumbres: [...new Set([...incertidumbres, ...respuestaBruta.incertidumbres])],
       fuentes: fuentesAportadas,
+      // Sólo tiene sentido si la consulta venía de una ficha: así una alucinación
+      // del modelo rellenando el campo sin motivo no llega a la pantalla.
+      correccionDelMaterial: peticion.ejercicio ? resolucion.discrepanciaConMaterial : null,
     };
 
     registro.info({

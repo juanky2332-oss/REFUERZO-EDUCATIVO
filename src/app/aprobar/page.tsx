@@ -1,17 +1,9 @@
-import type { Metadata } from 'next';
-import { Aprobar } from '@/components/Aprobar';
-import { Documento } from '@/components/ui/Documento';
+import { permanentRedirect } from 'next/navigation';
 
-export const metadata: Metadata = {
-  title: 'Quiero aprobar este tema',
-  description:
-    'Dinos qué entra en el examen y cuántos días faltan y te preparamos el plan de estudio, los contenidos esenciales, ejercicios de práctica y un simulacro.',
-};
-
+/**
+ * Ruta antigua. El plan de estudio se pide desde el botón + de la conversación,
+ * y desde el propio plan se encadenan la práctica y el simulacro.
+ */
 export default function PaginaAprobar() {
-  return (
-    <Documento>
-      <Aprobar />
-    </Documento>
-  );
+  permanentRedirect('/');
 }

@@ -114,6 +114,12 @@ export interface Resolucion {
   comprobacionesNumericas: ComprobacionNumerica[];
   unidades: string | null;
   advertencias: string[];
+  /**
+   * Explicación de en qué se desvía la solución que el material le había
+   * enseñado al alumno, cuando la hay. null si coincide o si la consulta no
+   * venía de un material.
+   */
+  discrepanciaConMaterial: string | null;
 }
 
 /**
@@ -181,6 +187,13 @@ export interface RespuestaEducativa {
   confianza: Confianza;
   incertidumbres: string[];
   fuentes: Fuente[];
+  /**
+   * Aviso de que la solución que se le enseñó en la ficha no coincide con esta.
+   * Lo rellena el servidor a partir de la resolución, nunca el modelo de la
+   * fase de explicación: si no, se podría perder por el camino justo cuando más
+   * falta hace.
+   */
+  correccionDelMaterial: string | null;
 }
 
 /**

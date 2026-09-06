@@ -5,11 +5,12 @@ import { BurbujaBreve } from './BurbujaBreve';
 import { PanelHerramienta, type PeticionHerramienta } from './PanelHerramienta';
 import { Pensando } from './Pensando';
 import { Redactor, type Herramienta } from './Redactor';
-import { VistaMaterial } from './VistaMaterial';
+import { VistaMaterial, type ConsultaSobrePregunta } from './VistaMaterial';
 import { VistaRespuesta } from './VistaRespuesta';
 import { Icono, type NombreIcono } from './ui/Icono';
-import type { MaterialGenerado } from '@/lib/ai/schemas';
+import type { EjercicioDeMaterial, MaterialGenerado } from '@/lib/ai/schemas';
 import { useAdjuntos } from '@/lib/cliente/adjuntos';
+import type { ImagenPreparada } from '@/lib/cliente/imagenes';
 import { generarMaterial } from '@/lib/cliente/generar';
 import { usePreferencias } from '@/lib/cliente/preferencias';
 import type {
@@ -34,13 +35,18 @@ import type {
  */
 
 type Entrada =
-  | { tipo: 'usuario'; id: string; texto: string; miniaturas: string[] }
+  | { tipo: 'usuario'; id: string; texto: string; miniaturas: string[]; etiqueta?: string }
   | { tipo: 'respuesta'; id: string; respuesta: RespuestaEducativa }
   | { tipo: 'breve'; id: string; mensaje: RespuestaBreve; confianza: Confianza }
   | { tipo: 'necesita_datos'; id: string; mensaje: string; analisis: Analisis }
   | { tipo: 'error'; id: string; mensaje: string }
   | { tipo: 'herramienta'; id: string; herramienta: Herramienta }
-  | { tipo: 'material'; id: string; material: MaterialGenerado };
+  | {
+      tipo: 'material';
+      id: string;
+      material: MaterialGenerado;
+      peticion: PeticionHerramienta;
+    };
 
 const ARRANQUES: { texto: string; icono: NombreIcono }[] = [
   { texto: 'Resuelve 3x + 2 = 14 y explícame por qué se cambia de signo', icono: 'lapiz' },
@@ -50,6 +56,54 @@ const ARRANQUES: { texto: string; icono: NombreIcono }[] = [
   },
   { texto: 'Explícame la diferencia entre célula procariota y eucariota', icono: 'libro' },
   { texto: '¿Cómo paso 3/4 a decimal y a porcentaje?', icono: 'lupa' },
+];
+
+/**
+ * Qué ofrecer después de cada material.
+ *
+ * Un plan de estudio sin con qué practicar se queda en buenas intenciones, y
+ * después de una tanda de ejercicios lo que apetece es medirse con el examen.
+ * Se ofrece, no se genera solo: cada tanda cuesta una llamada.
+ */
+export function siguientesPasos(tipo: Herramienta): Herramienta[] {
+  switch (tipo) {
+    case 'plan_estudio':
+      return ['ejercicios', 'examen'];
+    case 'resumen':
+      return ['ejercicios'];
+    case 'ejercicios':
+      return ['examen'];
+    case 'examen':
+      return ['ejercicios'];
+  }
+}
+
+export const NOMBRE_HERRAMIENTA: Record<Herramienta, string> = {
+  ejercicios: 'Ponme ejercicios de esto',
+  resumen: 'Resúmeme el tema',
+  examen: 'Hazme un simulacro de examen',
+  plan_estudio: 'Prepárame un plan hasta el examen',
+};
+
+/** Las tres cosas que hay que saber para usar esto, en la primera pantalla. */
+const COMO_VA: { icono: NombreIcono; titulo: string; detalle: string }[] = [
+  {
+    icono: 'camara',
+    titulo: 'Manda la foto',
+    detalle:
+      'Con el botón + de abajo, o pega un recorte con Ctrl+V. Puedes añadir texto en el mismo mensaje.',
+  },
+  {
+    icono: 'igual',
+    titulo: 'Compruebo el resultado',
+    detalle: 'Rehago las cuentas en el servidor y una segunda revisión busca fallos.',
+  },
+  {
+    icono: 'documento',
+    titulo: 'Te preparo material',
+    detalle:
+      'Ejercicios, examen, resumen o plan de estudio, con la solución de cada pregunta a un clic.',
+  },
 ];
 
 function nuevoId() {
@@ -124,118 +178,167 @@ export function Chat() {
 
   const anadirEntrada = useCallback((e: Entrada) => setEntradas((prev) => [...prev, e]), []);
 
-  const enviar = useCallback(async () => {
-    if (ocupado) return;
-    const mensaje = texto.trim();
-    if (!mensaje && adjuntos.imagenes.length === 0) return;
+  /**
+   * Manda una consulta al motor.
+   *
+   * Se entra por dos sitios: la barra de escritura y el botón «Preguntar» de una
+   * pregunta del material. Los dos acaban aquí para que la conversación sea una
+   * sola y el historial no se parta en dos hilos.
+   */
+  const mandar = useCallback(
+    async (envio: {
+      texto: string;
+      imagenes: ImagenPreparada[];
+      ejercicio?: EjercicioDeMaterial | null;
+      etiqueta?: string;
+    }) => {
+      if (ocupado) return;
+      const mensaje = envio.texto.trim();
+      if (!mensaje && envio.imagenes.length === 0) return;
 
-    const control = new AbortController();
-    abortar.current = control;
+      const control = new AbortController();
+      abortar.current = control;
 
-    const previas = entradas;
-    anadirEntrada({
-      tipo: 'usuario',
-      id: nuevoId(),
-      texto: mensaje,
-      miniaturas: adjuntos.imagenes.map((i) => i.previsualizacion),
-    });
-
-    const cuerpo = {
-      texto: mensaje,
-      imagenes: adjuntos.imagenes.map((i) => ({
-        mime: i.mime,
-        base64: i.base64,
-        nombre: i.nombre,
-      })),
-      nivel: preferencias.nivel,
-      curso: preferencias.curso,
-      materia: preferencias.materia,
-      historial: historialDe(previas),
-    };
-
-    setTexto('');
-    adjuntos.limpiar();
-    setEnCurso(true);
-    setFaseActual('analisis');
-
-    function procesar(evento: EventoStream) {
-      switch (evento.tipo) {
-        case 'fase':
-          if (evento.estado === 'inicio') setFaseActual(evento.fase);
-          break;
-        case 'respuesta':
-          anadirEntrada({ tipo: 'respuesta', id: nuevoId(), respuesta: evento.respuesta });
-          break;
-        case 'mensaje':
-          anadirEntrada({
-            tipo: 'breve',
-            id: nuevoId(),
-            mensaje: evento.mensaje,
-            confianza: evento.confianza,
-          });
-          break;
-        case 'necesita_datos':
-          anadirEntrada({
-            tipo: 'necesita_datos',
-            id: nuevoId(),
-            mensaje: evento.mensaje,
-            analisis: evento.analisis,
-          });
-          break;
-        case 'error':
-          anadirEntrada({ tipo: 'error', id: nuevoId(), mensaje: evento.mensaje });
-          break;
-        default:
-          break;
-      }
-    }
-
-    try {
-      const res = await fetch('/api/solve', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(cuerpo),
-        signal: control.signal,
+      const previas = entradas;
+      anadirEntrada({
+        tipo: 'usuario',
+        id: nuevoId(),
+        texto: mensaje,
+        miniaturas: envio.imagenes.map((i) => i.previsualizacion),
+        etiqueta: envio.etiqueta,
       });
 
-      if (!res.body) throw new Error('sin cuerpo');
+      const cuerpo = {
+        texto: mensaje,
+        ejercicio: envio.ejercicio ?? null,
+        imagenes: envio.imagenes.map((i) => ({
+          mime: i.mime,
+          base64: i.base64,
+          nombre: i.nombre,
+        })),
+        nivel: preferencias.nivel,
+        curso: preferencias.curso,
+        materia: preferencias.materia,
+        historial: historialDe(previas),
+      };
 
-      const lector = res.body.getReader();
-      const decodificador = new TextDecoder();
-      let resto = '';
+      setEnCurso(true);
+      setFaseActual('analisis');
 
-      for (;;) {
-        const { done, value } = await lector.read();
-        if (done) break;
-
-        resto += decodificador.decode(value, { stream: true });
-        const lineas = resto.split('\n');
-        resto = lineas.pop() ?? '';
-
-        for (const linea of lineas) {
-          if (!linea.trim()) continue;
-          try {
-            procesar(JSON.parse(linea) as EventoStream);
-          } catch {
-            // Una línea a medias no debe tumbar la lectura del resto.
-          }
+      function procesar(evento: EventoStream) {
+        switch (evento.tipo) {
+          case 'fase':
+            if (evento.estado === 'inicio') setFaseActual(evento.fase);
+            break;
+          case 'respuesta':
+            anadirEntrada({ tipo: 'respuesta', id: nuevoId(), respuesta: evento.respuesta });
+            break;
+          case 'mensaje':
+            anadirEntrada({
+              tipo: 'breve',
+              id: nuevoId(),
+              mensaje: evento.mensaje,
+              confianza: evento.confianza,
+            });
+            break;
+          case 'necesita_datos':
+            anadirEntrada({
+              tipo: 'necesita_datos',
+              id: nuevoId(),
+              mensaje: evento.mensaje,
+              analisis: evento.analisis,
+            });
+            break;
+          case 'error':
+            anadirEntrada({ tipo: 'error', id: nuevoId(), mensaje: evento.mensaje });
+            break;
+          default:
+            break;
         }
       }
-    } catch (e) {
-      if (!(e instanceof DOMException && e.name === 'AbortError')) {
-        anadirEntrada({
-          tipo: 'error',
-          id: nuevoId(),
-          mensaje:
-            'Se ha cortado la conexión antes de terminar. Comprueba tu conexión y vuelve a intentarlo.',
+
+      try {
+        const res = await fetch('/api/solve', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(cuerpo),
+          signal: control.signal,
         });
-      }
-    } finally {
-      setEnCurso(false);
-      setFaseActual(null);
-      abortar.current = null;
+
+        if (!res.body) throw new Error('sin cuerpo');
+
+        const lector = res.body.getReader();
+        const decodificador = new TextDecoder();
+        let resto = '';
+
+        for (;;) {
+          const { done, value } = await lector.read();
+          if (done) break;
+
+          resto += decodificador.decode(value, { stream: true });
+          const lineas = resto.split('\n');
+          resto = lineas.pop() ?? '';
+
+          for (const linea of lineas) {
+            if (!linea.trim()) continue;
+            try {
+              procesar(JSON.parse(linea) as EventoStream);
+            } catch {
+              // Una línea a medias no debe tumbar la lectura del resto.
+            }
+          }
+        }
+      } catch (e) {
+        if (!(e instanceof DOMException && e.name === 'AbortError')) {
+          anadirEntrada({
+            tipo: 'error',
+            id: nuevoId(),
+            mensaje:
+              'Se ha cortado la conexión antes de terminar. Comprueba tu conexión y vuelve a intentarlo.',
+          });
+        }
+      } finally {
+        setEnCurso(false);
+        setFaseActual(null);
+        abortar.current = null;
     }
-  }, [adjuntos, anadirEntrada, entradas, ocupado, preferencias, texto]);
+    },
+    [anadirEntrada, entradas, ocupado, preferencias],
+  );
+
+  /** Envío desde la barra de escritura. */
+  const enviar = useCallback(() => {
+    const pendiente = { texto, imagenes: adjuntos.imagenes };
+    setTexto('');
+    adjuntos.limpiar();
+    void mandar(pendiente);
+  }, [adjuntos, mandar, texto]);
+
+  /**
+   * Consulta lanzada desde una pregunta concreta del material.
+   *
+   * El enunciado y la solución que se le enseñó viajan aparte, no dentro del
+   * texto: el motor tiene que saber que esa solución la escribió él y que su
+   * trabajo ahora es rehacerla, no repetirla.
+   */
+  const preguntarSobreMaterial = useCallback(
+    (consulta: ConsultaSobrePregunta) => {
+      void mandar({
+        texto:
+          consulta.texto ||
+          'Explícame esta pregunta paso a paso y comprueba si la solución que me has dado está bien.',
+        imagenes: consulta.imagenes,
+        etiqueta: `Pregunta ${consulta.numero} · ${consulta.tituloMaterial}`,
+        ejercicio: {
+          titulo: consulta.tituloMaterial,
+          numero: consulta.numero,
+          enunciado: consulta.enunciado,
+          solucionPropuesta: consulta.solucionPropuesta,
+        },
+      });
+    },
+    [mandar],
+  );
 
   /** Abre la ficha de material dentro del hilo, sin sacar al alumno de aquí. */
   const abrirHerramienta = useCallback(
@@ -279,12 +382,35 @@ export function Chat() {
         return [
           ...sinFicha,
           r.ok
-            ? { tipo: 'material' as const, id: nuevoId(), material: r.material }
+            ? {
+                tipo: 'material' as const,
+                id: nuevoId(),
+                material: r.material,
+                peticion,
+              }
             : { tipo: 'error' as const, id: nuevoId(), mensaje: r.error },
         ];
       });
     },
     [preferencias.nivel],
+  );
+
+  /**
+   * Genera el siguiente material sobre el mismo tema, sin volver a preguntarlo
+   * todo. Lo único que cambia es el tipo; el tema, el curso y la materia ya
+   * estaban decididos.
+   */
+  const encadenar = useCallback(
+    async (anterior: PeticionHerramienta, tipo: Herramienta) => {
+      const id = nuevoId();
+      await generar(id, {
+        ...anterior,
+        tipo,
+        cantidad: tipo === 'examen' ? 6 : 8,
+        dias: tipo === 'plan_estudio' ? anterior.dias : null,
+      });
+    },
+    [generar],
   );
 
   const usarSugerencia = useCallback((t: string) => setTexto(t), []);
@@ -417,8 +543,28 @@ export function Chat() {
                 )}
 
                 {e.tipo === 'material' && (
-                  <div className="hoja rounded-tarjeta border border-borde bg-superficie p-4 shadow-[var(--sombra)] sm:p-5">
-                    <VistaMaterial material={e.material} />
+                  <div>
+                    <div className="hoja rounded-tarjeta border border-borde bg-superficie p-4 shadow-[var(--sombra)] sm:p-5">
+                      <VistaMaterial
+                        material={e.material}
+                        ocupado={ocupado}
+                        onPreguntar={preguntarSobreMaterial}
+                      />
+                    </div>
+                    <div className="no-imprimir mt-2 flex flex-wrap gap-1.5">
+                      {siguientesPasos(e.peticion.tipo).map((siguiente) => (
+                        <button
+                          key={siguiente}
+                          type="button"
+                          disabled={ocupado}
+                          onClick={() => void encadenar(e.peticion, siguiente)}
+                          className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-borde bg-superficie px-3 text-sm text-texto-suave transition hover:border-primario/45 hover:text-texto disabled:opacity-45"
+                        >
+                          <Icono nombre="mas" className="h-3.5 w-3.5 text-primario" />
+                          {NOMBRE_HERRAMIENTA[siguiente]}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </li>
@@ -449,7 +595,7 @@ export function Chat() {
         onTexto={setTexto}
         adjuntos={adjuntos}
         enCurso={ocupado}
-        onEnviar={() => void enviar()}
+        onEnviar={enviar}
         onParar={() => abortar.current?.abort()}
         preferencias={preferencias}
         onPreferencias={guardarPreferencias}
@@ -463,6 +609,12 @@ export function Chat() {
 function Mensaje({ entrada }: { entrada: Extract<Entrada, { tipo: 'usuario' }> }) {
   return (
     <div className="flex max-w-[85%] flex-col items-end gap-1.5">
+      {entrada.etiqueta && (
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-borde bg-superficie px-2.5 py-0.5 text-xs font-medium text-texto-suave">
+          <Icono nombre="documento" className="h-3 w-3 shrink-0 text-primario" />
+          {entrada.etiqueta}
+        </span>
+      )}
       {entrada.miniaturas.length > 0 && (
         <div className="flex flex-wrap justify-end gap-1.5">
           {entrada.miniaturas.map((m, n) => (
@@ -492,12 +644,29 @@ function Bienvenida({ onElegir }: { onElegir: (t: string) => void }) {
         ¿Con qué te echo una mano?
       </h1>
       <p className="mt-2 max-w-xl text-texto-suave">
-        Matemáticas, Física y Química y Biología y Geología de 1.º y 2.º de ESO. Manda la foto del
-        ejercicio o escríbeme la duda: resuelvo, compruebo las cuentas y te lo explico. Si algo no
-        lo puedo confirmar, te lo digo.
+        Matemáticas, Física y Química y Biología y Geología de 1.º y 2.º de ESO. Resuelvo,
+        compruebo las cuentas y te lo explico. Si algo no lo puedo confirmar, te lo digo.
       </p>
 
-      <ul className="mt-5 grid gap-2 sm:grid-cols-2">
+      <ul className="mt-5 grid gap-2.5 sm:grid-cols-3">
+        {COMO_VA.map((c) => (
+          <li
+            key={c.titulo}
+            className="rounded-xl border border-borde bg-superficie px-3.5 py-3"
+          >
+            <p className="flex items-center gap-2 text-sm font-semibold text-texto">
+              <Icono nombre={c.icono} className="h-4 w-4 shrink-0 text-primario" />
+              {c.titulo}
+            </p>
+            <p className="mt-1 text-sm leading-snug text-texto-suave">{c.detalle}</p>
+          </li>
+        ))}
+      </ul>
+
+      <p className="mt-6 text-xs font-bold uppercase tracking-[0.09em] text-texto-tenue">
+        O empieza por uno de estos
+      </p>
+      <ul className="mt-2 grid gap-2 sm:grid-cols-2">
         {ARRANQUES.map((a) => (
           <li key={a.texto}>
             <button

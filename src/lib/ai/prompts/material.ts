@@ -47,8 +47,11 @@ REGLAS DEL MATERIAL:
 Una pregunta sin solución no le sirve de nada. No escribas "respuesta abierta" ni "depende del alumno": si la
 pregunta admite varias respuestas válidas, escribe una respuesta modelo completa y di qué tiene que aparecer
 en cualquier respuesta que se dé por buena.
-Escribe la solución para que se entienda sola: el resultado y, en una o dos frases, cómo se llega a él. No basta
-con el número suelto. Si es un cálculo, deja la operación a la vista (por ejemplo: A = b·h/2 = 6·4/2 = 12 cm²).
+Escribe la solución para que se entienda sola: el resultado y, en una o dos frases, cómo se llega a él.
+MAL: "x = 5". MAL: "12 cm²". MAL: "Verdadero".
+BIEN: "Resta 5 en los dos lados: 3x = 15. Divide entre 3 en los dos lados: x = 5."
+BIEN: "A = b·h/2 = 6·4/2 = 12 cm². La base mide 6 cm y la altura 4 cm."
+El alumno tiene que poder ver DÓNDE se equivocó él, y para eso necesita los pasos, no sólo el número final.
 
 "loQueHayQueAprender": la lista de lo imprescindible del tema (conceptos, fórmulas, procedimientos y
 vocabulario). Es el apartado "LO QUE TENGO QUE APRENDER SÍ O SÍ" que verá el alumno.

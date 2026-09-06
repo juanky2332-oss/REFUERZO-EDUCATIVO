@@ -197,6 +197,20 @@ export function VistaMaterial({
                   ? () => setConsultando((n) => (n === p.numero ? null : p.numero))
                   : undefined
               }
+              onDesarrollar={
+                onPreguntar
+                  ? () =>
+                      onPreguntar({
+                        texto:
+                          'Explícame esta pregunta paso a paso, como si fuera la primera vez que la veo.',
+                        imagenes: [],
+                        numero: p.numero,
+                        enunciado: p.enunciado,
+                        solucionPropuesta: p.solucion,
+                        tituloMaterial: material.titulo,
+                      })
+                  : undefined
+              }
               ocupado={ocupado}
               onEnviarConsulta={(consulta) => {
                 setConsultando(null);
@@ -295,6 +309,7 @@ function Pregunta({
   onAlternar,
   consultando,
   onConsultar,
+  onDesarrollar,
   onEnviarConsulta,
   ocupado,
 }: {
@@ -304,6 +319,7 @@ function Pregunta({
   onAlternar: () => void;
   consultando: boolean;
   onConsultar?: () => void;
+  onDesarrollar?: () => void;
   onEnviarConsulta: (consulta: ConsultaEscrita) => void;
   ocupado: boolean;
 }) {
@@ -369,9 +385,27 @@ function Pregunta({
               <Texto className="mt-1 text-sm text-texto-suave">{pregunta.solucion}</Texto>
             ) : (
               <p className="mt-1 text-sm text-texto-suave">
-                Esta me la he dejado sin resolver. Pulsa «Preguntar» y te la resuelvo paso a paso,
-                que así además pasa por la comprobación.
+                Esta me la he dejado sin resolver. Dale a «Explícamela paso a paso» y te la saco
+                entera, que así además pasa por la comprobación.
               </p>
+            )}
+
+            {/*
+              La salida siempre está a la vista. Una solución de una línea a veces
+              basta y a veces se queda corta, y no hay forma fiable de saber
+              cuál es cuál desde aquí: en lugar de adivinarlo con una heurística,
+              se ofrece siempre. Además, lo que sale por aquí sí pasa por el
+              recálculo aritmético y el revisor, que esta solución no ha visto.
+            */}
+            {onDesarrollar && (
+              <button
+                type="button"
+                onClick={onDesarrollar}
+                className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-exito/40 bg-superficie px-3 text-xs font-semibold text-exito transition hover:bg-exito-suave"
+              >
+                <Icono nombre="lapiz" className="h-3.5 w-3.5" />
+                Explícamela paso a paso
+              </button>
             )}
           </div>
 

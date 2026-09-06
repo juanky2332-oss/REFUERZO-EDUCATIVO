@@ -6,21 +6,25 @@ import { PanelHerramienta, type PeticionHerramienta } from './PanelHerramienta';
 import { Pensando } from './Pensando';
 import { Redactor, type Herramienta } from './Redactor';
 import { VistaMaterial, type ConsultaSobrePregunta } from './VistaMaterial';
-import { VistaRespuesta } from './VistaRespuesta';
+import { VistaRespuesta, type ConsultaSobreRespuesta } from './VistaRespuesta';
 import { Icono, type NombreIcono } from './ui/Icono';
-import type { EjercicioDeMaterial, MaterialGenerado } from '@/lib/ai/schemas';
+import type { EjercicioDeMaterial } from '@/lib/ai/schemas';
 import { useAdjuntos } from '@/lib/cliente/adjuntos';
 import type { ImagenPreparada } from '@/lib/cliente/imagenes';
 import { generarMaterial } from '@/lib/cliente/generar';
+import type { MaterialVerificado } from '@/lib/material';
 import { usePreferencias } from '@/lib/cliente/preferencias';
 import type {
   Analisis,
   Confianza,
+  Curso,
+  Materia,
   EventoStream,
   FasePipeline,
   MensajeHistorial,
   RespuestaBreve,
   RespuestaEducativa,
+  SolicitudMaterial,
 } from '@/lib/types';
 
 /**
@@ -44,8 +48,8 @@ type Entrada =
   | {
       tipo: 'material';
       id: string;
-      material: MaterialGenerado;
-      peticion: PeticionHerramienta;
+      material: MaterialVerificado;
+      solicitud: SolicitudMaterial;
     };
 
 const ARRANQUES: { texto: string; icono: NombreIcono }[] = [
@@ -65,16 +69,17 @@ const ARRANQUES: { texto: string; icono: NombreIcono }[] = [
  * después de una tanda de ejercicios lo que apetece es medirse con el examen.
  * Se ofrece, no se genera solo: cada tanda cuesta una llamada.
  */
-export function siguientesPasos(tipo: Herramienta): Herramienta[] {
+export function siguientesPasos(tipo: SolicitudMaterial['tipo']): Herramienta[] {
   switch (tipo) {
     case 'plan_estudio':
       return ['ejercicios', 'examen'];
     case 'resumen':
       return ['ejercicios'];
-    case 'ejercicios':
-      return ['examen'];
     case 'examen':
       return ['ejercicios'];
+    // Ejercicios, fichas y tests son práctica: lo que falta después es medirse.
+    default:
+      return ['examen'];
   }
 }
 
@@ -130,6 +135,42 @@ export function resumirParaHistorial(r: RespuestaEducativa): string {
  * entera. Las tarjetas de material no entran: ocupan muchísimo y no cambian el
  * sentido de una duda sobre un ejercicio.
  */
+/**
+ * Qué preferencias hay que corregir a la vista de lo que el usuario ha escrito.
+ *
+ * El selector guarda lo último que se eligió, y ahí se queda. Pedir ecuaciones
+ * con «Biología y Geología» puesto de la vez anterior es lo normal, y dejar el
+ * chip mintiendo debajo hace dudar de todo lo demás. Sólo se corrige cuando el
+ * análisis ha detectado algo CONCRETO y distinto: nunca se borra una elección
+ * del usuario para dejarla en «no lo sé».
+ */
+export function preferenciasQueCorregir(
+  analisis: Analisis,
+  actuales: { materia: Materia; curso: Curso },
+): { materia?: Materia; curso?: Curso } {
+  const cambios: { materia?: Materia; curso?: Curso } = {};
+
+  const materiaDetectada = analisis.materia;
+  if (
+    materiaDetectada !== 'desconocida' &&
+    materiaDetectada !== 'otra' &&
+    materiaDetectada !== actuales.materia
+  ) {
+    cambios.materia = materiaDetectada;
+  }
+
+  const cursoDetectado = analisis.curso;
+  if (
+    cursoDetectado !== 'desconocido' &&
+    cursoDetectado !== 'otro' &&
+    cursoDetectado !== actuales.curso
+  ) {
+    cambios.curso = cursoDetectado;
+  }
+
+  return cambios;
+}
+
 export function historialDe(entradas: Entrada[]): MensajeHistorial[] {
   const h: MensajeHistorial[] = [];
 
@@ -386,7 +427,14 @@ export function Chat() {
                 tipo: 'material' as const,
                 id: nuevoId(),
                 material: r.material,
-                peticion,
+                solicitud: {
+                  tipo: peticion.tipo,
+                  materia: peticion.materia,
+                  curso: peticion.curso,
+                  tema: peticion.tema,
+                  cantidad: peticion.cantidad,
+                  dias: peticion.dias,
+                },
               }
             : { tipo: 'error' as const, id: nuevoId(), mensaje: r.error },
         ];
@@ -401,16 +449,53 @@ export function Chat() {
    * estaban decididos.
    */
   const encadenar = useCallback(
-    async (anterior: PeticionHerramienta, tipo: Herramienta) => {
-      const id = nuevoId();
-      await generar(id, {
-        ...anterior,
+    async (anterior: SolicitudMaterial, tipo: Herramienta) => {
+      await generar(nuevoId(), {
         tipo,
+        materia: anterior.materia,
+        curso: anterior.curso,
+        tema: anterior.tema,
         cantidad: tipo === 'examen' ? 6 : 8,
         dias: tipo === 'plan_estudio' ? anterior.dias : null,
       });
     },
     [generar],
+  );
+
+  /**
+   * Duda sobre un paso concreto de una explicación ya dada.
+   *
+   * El paso señalado viaja como el «ejercicio» del que se pregunta, con la
+   * misma regla que el material: lo que se le enseñó no se da por bueno, se
+   * rehace. Así, un «¿por qué sale 12 y no -12?» acaba con el paso recalculado
+   * y comprobado, no con el mismo texto repetido de otra manera.
+   */
+  const preguntarSobreRespuesta = useCallback(
+    (consulta: ConsultaSobreRespuesta) => {
+      const sobreUnPaso = consulta.numeroPaso !== null;
+
+      void mandar({
+        texto: consulta.texto || 'No entiendo este paso. Explícamelo de otra forma.',
+        imagenes: consulta.imagenes,
+        etiqueta: sobreUnPaso
+          ? `Paso ${consulta.numeroPaso} · ${consulta.tituloRespuesta}`
+          : consulta.tituloRespuesta,
+        ejercicio: {
+          titulo: consulta.tituloRespuesta,
+          numero: consulta.numeroPaso,
+          enunciado: consulta.enunciado,
+          solucionPropuesta: [
+            sobreUnPaso
+              ? `Paso ${consulta.numeroPaso}${consulta.tituloPaso ? ` («${consulta.tituloPaso}»)` : ''}: ${consulta.contenidoPaso}`
+              : '',
+            consulta.resultado ? `Resultado que se le dio: ${consulta.resultado}` : '',
+          ]
+            .filter(Boolean)
+            .join('\n'),
+        },
+      });
+    },
+    [mandar],
   );
 
   const usarSugerencia = useCallback((t: string) => setTexto(t), []);
@@ -470,7 +555,11 @@ export function Chat() {
 
                 {e.tipo === 'respuesta' && (
                   <div>
-                    <VistaRespuesta respuesta={e.respuesta} />
+                    <VistaRespuesta
+                      respuesta={e.respuesta}
+                      ocupado={ocupado}
+                      onPreguntar={preguntarSobreRespuesta}
+                    />
                     {e.respuesta.preguntaDeSeguimiento && (
                       <div className="no-imprimir mt-2">
                         <p className="text-sm text-texto-suave">
@@ -552,12 +641,12 @@ export function Chat() {
                       />
                     </div>
                     <div className="no-imprimir mt-2 flex flex-wrap gap-1.5">
-                      {siguientesPasos(e.peticion.tipo).map((siguiente) => (
+                      {siguientesPasos(e.solicitud.tipo).map((siguiente) => (
                         <button
                           key={siguiente}
                           type="button"
                           disabled={ocupado}
-                          onClick={() => void encadenar(e.peticion, siguiente)}
+                          onClick={() => void encadenar(e.solicitud, siguiente)}
                           className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-borde bg-superficie px-3 text-sm text-texto-suave transition hover:border-primario/45 hover:text-texto disabled:opacity-45"
                         >
                           <Icono nombre="mas" className="h-3.5 w-3.5 text-primario" />

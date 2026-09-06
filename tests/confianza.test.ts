@@ -21,6 +21,7 @@ const analisisLimpio: Analisis = {
   bloqueantes: [],
   puedeResolverse: true,
   esSeguimiento: false,
+  materialSolicitado: null,
   resumenTarea: 'Resolver una ecuación de primer grado.',
 };
 

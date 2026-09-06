@@ -7,21 +7,18 @@
  * `paraAlumno()`, que elimina las soluciones por construcción (regla 28).
  */
 
-import { pedirJSON } from '@/lib/ai/pedir';
-import { systemMaterial } from '@/lib/ai/prompts/material';
-import { esquemaMaterial, esquemaPeticionGenerate } from '@/lib/ai/schemas';
+import { esquemaPeticionGenerate } from '@/lib/ai/schemas';
 import { limiteGenerate, ventanaLimiteMs } from '@/lib/config';
 import { registro } from '@/lib/observabilidad';
+import { generarMaterialVerificado } from '@/lib/pipeline/generador';
 import { traducirError } from '@/lib/pipeline/orquestador';
 import { claveCliente, consumir } from '@/lib/security/rate-limit';
-import { envolverNoConfiable, generarNonce } from '@/lib/security/sanitize';
+import { generarNonce } from '@/lib/security/sanitize';
 
 export const maxDuration = 120;
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request): Promise<Response> {
-  const inicio = Date.now();
-
   const limite = consumir(`generate:${claveCliente(req)}`, limiteGenerate(), ventanaLimiteMs());
   if (!limite.permitido) {
     return Response.json(
@@ -55,47 +52,9 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const peticion = validacion.data;
-  const nonce = generarNonce();
 
   try {
-    const { valor: material, ms } = await pedirJSON(
-      {
-        system: systemMaterial(peticion),
-        mensajes: [
-          {
-            rol: 'user',
-            partes: [
-              {
-                tipo: 'texto',
-                texto: [
-                  `Tema solicitado:\n${envolverNoConfiable('tema', peticion.tema, nonce)}`,
-                  peticion.notas
-                    ? `Indicaciones adicionales del usuario:\n${envolverNoConfiable('notas', peticion.notas, nonce)}`
-                    : '',
-                  `Tipo de material: ${peticion.tipo}. Número de elementos: ${peticion.numeroPreguntas}.`,
-                ]
-                  .filter(Boolean)
-                  .join('\n\n'),
-              },
-            ],
-          },
-        ],
-        maxTokens: 6000,
-        etiqueta: 'material',
-      },
-      esquemaMaterial,
-    );
-
-    registro.info({
-      evento: 'material_generado',
-      ms,
-      datos: {
-        tipo: peticion.tipo,
-        preguntas: material.preguntas.length,
-        totalMs: Date.now() - inicio,
-      },
-    });
-
+    const material = await generarMaterialVerificado(peticion, generarNonce());
     return Response.json({ material });
   } catch (e) {
     const { mensaje, codigo } = traducirError(e);

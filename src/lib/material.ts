@@ -8,9 +8,28 @@
  */
 
 import type { MaterialGenerado, PreguntaMaterial } from '@/lib/ai/schemas';
-import type { Curso, Materia } from '@/lib/types';
+import type { Curso, Materia, ResultadoComprobacionNumerica } from '@/lib/types';
 
-export type PreguntaAlumno = Omit<PreguntaMaterial, 'solucion' | 'criterioCorreccion'>;
+/**
+ * Material con las cuentas ya rehechas por el servidor.
+ *
+ * El generador escribe la solución de una tacada, sin recalcular nada. Antes
+ * eso llegaba tal cual a la pantalla; ahora cada pregunta trae el resultado de
+ * pasar sus operaciones por el evaluador, y la interfaz puede avisar de las que
+ * no cuadran en lugar de presentarlas como buenas.
+ */
+export interface PreguntaVerificada extends Omit<PreguntaMaterial, 'comprobaciones'> {
+  comprobaciones: ResultadoComprobacionNumerica[];
+}
+
+export interface MaterialVerificado extends Omit<MaterialGenerado, 'preguntas'> {
+  preguntas: PreguntaVerificada[];
+}
+
+export type PreguntaAlumno = Omit<
+  PreguntaMaterial,
+  'solucion' | 'criterioCorreccion' | 'pasos' | 'comprobaciones'
+>;
 
 export interface MaterialAlumno {
   titulo: string;
@@ -24,7 +43,7 @@ export interface MaterialAlumno {
   puntuacionTotal: number;
 }
 
-export function paraAlumno(material: MaterialGenerado): MaterialAlumno {
+export function paraAlumno(material: MaterialGenerado | MaterialVerificado): MaterialAlumno {
   return {
     titulo: material.titulo,
     tema: material.tema,
@@ -44,7 +63,7 @@ export function paraAlumno(material: MaterialGenerado): MaterialAlumno {
   };
 }
 
-export function puntuacionTotal(material: MaterialGenerado): number {
+export function puntuacionTotal(material: MaterialGenerado | MaterialVerificado): number {
   return Math.round(material.preguntas.reduce((s, p) => s + p.puntuacion, 0) * 100) / 100;
 }
 

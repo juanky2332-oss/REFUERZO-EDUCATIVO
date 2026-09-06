@@ -5,6 +5,8 @@
  * viaja en estructuras tipadas, nunca en texto libre. Ver regla 60 del proyecto.
  */
 
+import type { MaterialVerificado } from '@/lib/material';
+
 export const MATERIAS = [
   'matematicas',
   'fisica_quimica',
@@ -93,6 +95,12 @@ export interface Analisis {
    * resolver nada nuevo. Habilita la vía rápida de una sola llamada.
    */
   esSeguimiento: boolean;
+  /** Material que pide el usuario, si lo que quiere es que se lo prepares. */
+  materialSolicitado: {
+    tipo: 'ejercicios' | 'examen' | 'resumen' | 'ficha' | 'test' | 'plan_estudio';
+    tema: string;
+    cantidad: number;
+  } | null;
   resumenTarea: string;
 }
 
@@ -211,12 +219,23 @@ export interface RespuestaBreve {
   incertidumbres: string[];
 }
 
+/** Lo que se ha pedido generar, para poder encadenar lo siguiente. */
+export interface SolicitudMaterial {
+  tipo: 'ejercicios' | 'examen' | 'resumen' | 'ficha' | 'test' | 'plan_estudio';
+  materia: Materia;
+  curso: Curso;
+  tema: string;
+  cantidad: number;
+  dias: number | null;
+}
+
 export type FasePipeline =
   | 'analisis'
   | 'resolucion'
   | 'verificacion'
   | 'explicacion'
   | 'charla'
+  | 'material'
   | 'listo';
 
 export const FASE_ETIQUETA: Record<FasePipeline, string> = {
@@ -225,6 +244,7 @@ export const FASE_ETIQUETA: Record<FasePipeline, string> = {
   verificacion: 'Comprobando la solución…',
   explicacion: 'Preparando la explicación…',
   charla: 'Pensando la respuesta…',
+  material: 'Preparándote el material…',
   listo: 'Listo',
 };
 
@@ -236,6 +256,7 @@ export type EventoStream =
   | { tipo: 'comprobaciones'; resultados: ResultadoComprobacionNumerica[] }
   | { tipo: 'respuesta'; respuesta: RespuestaEducativa }
   | { tipo: 'mensaje'; mensaje: RespuestaBreve; confianza: Confianza }
+  | { tipo: 'material'; material: MaterialVerificado; solicitud: SolicitudMaterial }
   | { tipo: 'error'; mensaje: string; codigo: string };
 
 export interface MensajeHistorial {

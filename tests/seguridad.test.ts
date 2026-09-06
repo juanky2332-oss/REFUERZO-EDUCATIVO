@@ -233,8 +233,20 @@ describe('separación entre cuadernillo y solucionario', () => {
           numero: 1,
           enunciado: 'Calcula 1/2 + 1/4',
           puntuacion: 2,
+          pasos: ['PASO_SECRETO: paso 1/2 a cuartos y queda 2/4.'],
           solucion: 'SOLUCION_SECRETA 3/4',
           criterioCorreccion: 'CRITERIO_SECRETO 1 punto por el denominador común',
+          comprobaciones: [
+            {
+              descripcion: 'COMPROBACION_SECRETA',
+              expresion: '1/2 + 1/4',
+              valorEsperado: 0.75,
+              tolerancia: 0.001,
+              ok: true,
+              valorCalculado: 0.75,
+              error: null,
+            },
+          ],
         },
       ],
       loQueHayQueAprender: ['Denominador común'],
@@ -246,6 +258,10 @@ describe('separación entre cuadernillo y solucionario', () => {
 
     expect(serializado).not.toContain('SOLUCION_SECRETA');
     expect(serializado).not.toContain('CRITERIO_SECRETO');
+    // El planteamiento y las comprobaciones son solucionario igual que la
+    // respuesta: en el cuadernillo que se reparte no puede quedar ni rastro.
+    expect(serializado).not.toContain('PASO_SECRETO');
+    expect(serializado).not.toContain('COMPROBACION_SECRETA');
     expect(serializado).not.toContain('notasDidacticas');
     expect(alumno.preguntas[0].enunciado).toBe('Calcula 1/2 + 1/4');
     expect(alumno.puntuacionTotal).toBe(2);

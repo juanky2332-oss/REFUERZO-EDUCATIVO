@@ -1,6 +1,7 @@
 'use client';
 
-import type { MaterialGenerado, PeticionGenerate } from '@/lib/ai/schemas';
+import type { PeticionGenerate } from '@/lib/ai/schemas';
+import type { MaterialVerificado } from '@/lib/material';
 
 /**
  * Llamada al generador de material desde el navegador.
@@ -11,7 +12,7 @@ import type { MaterialGenerado, PeticionGenerate } from '@/lib/ai/schemas';
  */
 
 export type ResultadoMaterial =
-  | { ok: true; material: MaterialGenerado }
+  | { ok: true; material: MaterialVerificado }
   | { ok: false; error: string };
 
 export async function generarMaterial(
@@ -37,7 +38,7 @@ export async function generarMaterial(
       };
     }
 
-    const { material } = datos as { material: MaterialGenerado };
+    const { material } = datos as { material: MaterialVerificado };
     return { ok: true, material };
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') {

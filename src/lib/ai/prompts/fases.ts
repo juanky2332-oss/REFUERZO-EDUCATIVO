@@ -30,6 +30,20 @@ Bien: "¿Qué ejercicio es el apartado b? Mándame una foto del enunciado comple
 Bien: "No distingo el número que hay debajo de la raíz. ¿Es un 3 o un 8?"
 Mal: "Necesito más información." / "Falta contexto"
 
+¿PIDE MATERIAL O TRAE UN EJERCICIO? ("materialSolicitado"). Es la primera decisión y hay que acertarla.
+Rellena "materialSolicitado" cuando el usuario te PIDA QUE LE PREPARES algo: "ponme 5 ejercicios de ecuaciones",
+"hazme un examen de fracciones", "necesito un resumen de la célula", "prepárame un test", "quiero practicar
+proporcionalidad", "dame ejercicios para el examen del viernes".
+- "tipo": "ejercicios" para práctica; "examen" si pide examen, prueba, control o simulacro; "test" si pide tipo
+  test o preguntas con opciones; "resumen" si pide resumen, esquema o apuntes; "ficha" si pide una ficha con algo
+  de teoría; "plan_estudio" si pide organizarse o un plan hasta el examen.
+- "tema": el contenido concreto, tal como lo diría un profesor ("Ecuaciones de primer grado", "La célula",
+  "Densidad"). Si no lo dice, deja lo más aproximado que se deduzca del mensaje.
+- "cantidad": cuántos pide. Si no lo dice, 5 para ejercicios y 6 para un examen.
+Déjalo en null cuando el usuario TRAIGA un ejercicio para que se lo resuelvas, corrijas o expliques, aunque venga
+en plural ("resuélveme estos tres"), y también cuando pregunte por un concepto ("qué es una incógnita").
+Si rellenas "materialSolicitado", pon "puedeResolverse": true: no hace falta nada más para poder prepararlo.
+
 VÍA RÁPIDA DE CONVERSACIÓN ("esSeguimiento"). Pon true SÓLO si se cumple TODO esto:
 - Hay conversación previa y el alumno se refiere a algo YA explicado en ella.
 - Lo que pide es reformular, aclarar una palabra, repetir un paso, poner un ejemplo o entender el porqué.
@@ -63,6 +77,7 @@ ESQUEMA JSON EXACTO:
   "bloqueantes": string[],
   "puedeResolverse": boolean,
   "esSeguimiento": boolean,
+  "materialSolicitado": { "tipo": "ejercicios" | "examen" | "resumen" | "ficha" | "test" | "plan_estudio", "tema": string, "cantidad": number } | null,
   "resumenTarea": string
 }
 
@@ -95,6 +110,10 @@ aritméticas clave en las que se apoya tu resultado y exprésalas de forma que u
   Biología), devuelve una lista vacía. No te inventes operaciones para rellenar.
 
 Ejemplo correcto: { "descripcion": "Despejo x: (14-2)/3", "expresion": "(14-2)/3", "valorEsperado": 4, "tolerancia": 0.001 }
+
+Los "pasos" que escribas aquí son el desarrollo que el alumno copiaría en el cuaderno: uno por transformación
+real, con los despejes por transposición ("el 2 pasa dividiendo"), nunca repitiendo la operación en los dos
+lados de la igualdad y nunca con pasos de relleno del tipo "mira la ecuación".
 
 CUIDADO CON LOS DATOS DETECTADOS. Sólo son fiables los valores que vengan del enunciado. Si en el contexto
 aparece la respuesta del alumno, es material a revisar, NUNCA un dato de partida: resuelve por tu cuenta desde el

@@ -13,13 +13,13 @@ const DESCRIPCION_TIPO: Record<PeticionGenerate['tipo'], string> = {
   examen:
     'un examen realista de aula, con la puntuación de cada pregunta sumando 10 puntos en total, mezclando preguntas de aplicación directa y algún problema. Sin preguntas trampa.',
   resumen:
-    'un resumen del tema. En este caso cada elemento de "preguntas" es un APARTADO del resumen: "enunciado" es el título del apartado y "solucion" es el contenido explicado de ese apartado. Pon "puntuacion": 0 en todos, porque un resumen no se puntúa.',
+    'un resumen del tema. En este caso cada elemento de "preguntas" es un APARTADO del resumen: "enunciado" es el título del apartado, "pasos" son las ideas de ese apartado explicadas una a una y "solucion" es la idea principal en una frase. Pon "puntuacion": 0 en todos, porque un resumen no se puntúa.',
   ficha:
     'una ficha de trabajo con una parte breve de recordatorio teórico y actividades de aplicación.',
   test:
     'preguntas tipo test. Cada "enunciado" incluye la pregunta y cuatro opciones etiquetadas a), b), c) y d), una sola correcta. En "solucion" indica la letra correcta y por qué las otras no lo son.',
   plan_estudio:
-    'un plan de estudio repartido en sesiones. OJO: cada elemento de "preguntas" es UNA SESIÓN DE TRABAJO, no un ejercicio suelto. En "enunciado" escribe el nombre de la sesión, su objetivo y qué hacer exactamente: qué repasar, qué practicar, cuántos ejercicios y cuánto tiempo dedicarle (entre 20 y 45 minutos). En "solucion" escribe cómo sabrá el alumno que esa sesión le ha salido bien, es decir qué tiene que ser capaz de hacer al terminarla. Pon "puntuacion": 0 en todas, porque un plan no se puntúa.',
+    'un plan de estudio repartido en sesiones. OJO: cada elemento de "preguntas" es UNA SESIÓN DE TRABAJO, no un ejercicio suelto. En "enunciado" escribe el nombre de la sesión y su objetivo. En "pasos" escribe qué hacer exactamente, en orden: qué repasar, qué practicar, cuántos ejercicios y cuánto tiempo dedicarle (entre 20 y 45 minutos en total). En "solucion" escribe cómo sabrá el alumno que esa sesión le ha salido bien, es decir qué tiene que ser capaz de hacer al terminarla. Pon "puntuacion": 0 en todas, porque un plan no se puntúa.',
 };
 
 export function systemMaterial(p: PeticionGenerate): string {
@@ -47,11 +47,33 @@ REGLAS DEL MATERIAL:
 Una pregunta sin solución no le sirve de nada. No escribas "respuesta abierta" ni "depende del alumno": si la
 pregunta admite varias respuestas válidas, escribe una respuesta modelo completa y di qué tiene que aparecer
 en cualquier respuesta que se dé por buena.
-Escribe la solución para que se entienda sola: el resultado y, en una o dos frases, cómo se llega a él.
-MAL: "x = 5". MAL: "12 cm²". MAL: "Verdadero".
-BIEN: "Resta 5 en los dos lados: 3x = 15. Divide entre 3 en los dos lados: x = 5."
-BIEN: "A = b·h/2 = 6·4/2 = 12 cm². La base mide 6 cm y la altura 4 cm."
-El alumno tiene que poder ver DÓNDE se equivocó él, y para eso necesita los pasos, no sólo el número final.
+"pasos" ES EL PLANTEAMIENTO, y es lo más importante de cada pregunta. Escribe ahí, en orden, cómo se resuelve:
+un paso por elemento de la lista, cada uno con lo que se hace y por qué. Entre 2 y 6 pasos. El alumno tiene que
+poder comparar su desarrollo con el tuyo y ver DÓNDE se torció, así que no te saltes ninguno.
+Adecúa los pasos a la materia: en Matemáticas y en Física y Química son operaciones y despejes con las
+unidades a la vista; en Biología y Geología son las ideas encadenadas (estructura, función, causa y efecto).
+Ejemplo en Matemáticas para "2x + 3 = 7":
+  ["El 3 está sumando, así que pasa al otro lado restando: 2x = 7 - 3 = 4.",
+   "El 2 está multiplicando a la x, así que pasa dividiendo: x = 4/2 = 2.",
+   "Compruebo: 2·2 + 3 = 7, así que x = 2 es correcto."]
+Ejemplo en Física y Química para una densidad:
+  ["Paso las unidades al SI: 250 g = 0,25 kg y 100 cm³ = 0,0001 m³.",
+   "Aplico la fórmula de la densidad: d = m/V.",
+   "Sustituyo: d = 0,25/0,0001 = 2500 kg/m³."]
+
+"solucion" es el RESULTADO, corto y claro: "x = 2", "d = 2500 kg/m³", "Las procariotas no tienen núcleo". No
+repitas ahí todo el desarrollo, que ya está en "pasos". No escribas "respuesta abierta" ni "depende del alumno":
+si la pregunta admite varias respuestas, escribe una respuesta modelo y di qué debe aparecer para darla por buena.
+
+"comprobaciones": las operaciones aritméticas en las que se apoya tu solución, para que el servidor las rehaga por
+su cuenta. Es lo que impide que una ficha con una cuenta mal hecha se estudie como si estuviera bien.
+- "expresion" debe ser aritmética PURA: sólo números, + - * / ^ % ( ) y sqrt, abs, min, max, round, floor, ceil,
+  sin, cos, tan, ln, log, exp, pow. NADA de letras, incógnitas ni unidades.
+- "valorEsperado" es el número que tú afirmas que da esa expresión. Punto decimal, no coma.
+- Para una ecuación, comprueba la solución sustituyéndola: para 2x + 3 = 7 con x = 2, pon
+  { "descripcion": "Sustituyo x = 2", "expresion": "2*2 + 3", "valorEsperado": 7, "tolerancia": 0.001 }.
+- Si la pregunta no tiene ninguna operación comprobable (conceptual de Biología, por ejemplo), deja la lista
+  vacía. NO te inventes operaciones para rellenar.
 
 "loQueHayQueAprender": la lista de lo imprescindible del tema (conceptos, fórmulas, procedimientos y
 vocabulario). Es el apartado "LO QUE TENGO QUE APRENDER SÍ O SÍ" que verá el alumno.
@@ -65,7 +87,7 @@ ESQUEMA JSON EXACTO:
   "tema": string,
   "instrucciones": string,
   "duracionMinutos": number | null,
-  "preguntas": [{ "numero": number, "enunciado": string, "puntuacion": number, "solucion": string, "criterioCorreccion": string }],
+  "preguntas": [{ "numero": number, "enunciado": string, "puntuacion": number, "pasos": string[], "solucion": string, "criterioCorreccion": string, "comprobaciones": [{ "descripcion": string, "expresion": string, "valorEsperado": number, "tolerancia": number }] }],
   "loQueHayQueAprender": string[],
   "notasDidacticas": string[]
 }

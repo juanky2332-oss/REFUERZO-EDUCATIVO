@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { InsigniaConfianza } from './InsigniaConfianza';
+import { PanelConsulta, type ConsultaEscrita } from './PanelConsulta';
 import { Icono, type NombreIcono } from './ui/Icono';
 import { Boton } from './ui/primitivos';
 import type { CorreccionAlumno, RespuestaEducativa } from '@/lib/types';
@@ -24,6 +25,22 @@ import type { CorreccionAlumno, RespuestaEducativa } from '@/lib/types';
  * visibles y fuera de las pestañas. Nunca pueden quedar escondidas detrás de un
  * clic, porque son justo lo que el alumno no debe copiar sin contrastar.
  */
+
+/**
+ * Duda sobre un punto concreto de la explicación.
+ *
+ * `numeroPaso` es null cuando la pregunta es sobre la respuesta entera. Con
+ * número, el motor recibe ese paso señalado y lo rehace: es la diferencia entre
+ * «no lo entiendo» y «no entiendo por qué aquí sale 12 y no -12».
+ */
+export interface ConsultaSobreRespuesta extends ConsultaEscrita {
+  numeroPaso: number | null;
+  tituloPaso: string;
+  contenidoPaso: string;
+  tituloRespuesta: string;
+  enunciado: string;
+  resultado: string;
+}
 
 const ESTILO_CORRECCION: Record<
   CorreccionAlumno['estado'],
@@ -169,12 +186,30 @@ function Etiqueta({ children }: { children: React.ReactNode }) {
   );
 }
 
+function BotonDuda({ onClick, abierto }: { onClick: () => void; abierto: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={abierto}
+      className="no-imprimir mt-1.5 inline-flex min-h-8 items-center gap-1.5 rounded-full px-2 text-xs font-medium text-texto-tenue transition hover:bg-superficie-2 hover:text-primario"
+    >
+      <Icono nombre="chat" className="h-3.5 w-3.5" />
+      {abierto ? 'Cerrar' : 'No entiendo este paso'}
+    </button>
+  );
+}
+
 function ListaDePasos({
   pasos,
   className = '',
+  dudaAbierta,
+  onDuda,
 }: {
   pasos: RespuestaEducativa['pasos'];
   className?: string;
+  dudaAbierta?: number | null;
+  onDuda?: (n: number) => void;
 }) {
   return (
     <ol className={`space-y-4 ${className}`}>
@@ -189,6 +224,7 @@ function ListaDePasos({
           <div className="min-w-0 flex-1">
             {p.titulo && <p className="font-semibold text-texto">{p.titulo}</p>}
             <Texto className="mt-0.5 text-texto-suave">{p.contenido}</Texto>
+            {onDuda && <BotonDuda onClick={() => onDuda(n)} abierto={dudaAbierta === n} />}
           </div>
         </li>
       ))}
@@ -196,15 +232,48 @@ function ListaDePasos({
   );
 }
 
-function Pasos({ pasos }: { pasos: RespuestaEducativa['pasos'] }) {
+function Pasos({
+  pasos,
+  ocupado,
+  onPreguntar,
+}: {
+  pasos: RespuestaEducativa['pasos'];
+  ocupado: boolean;
+  onPreguntar?: (n: number, consulta: ConsultaEscrita) => void;
+}) {
   const [todos, setTodos] = useState(() => empiezaConTodosLosPasos(pasos.length));
   const [actual, setActual] = useState(0);
+  const [duda, setDuda] = useState<number | null>(null);
   const indice = Math.min(actual, pasos.length - 1);
+
+  const alternarDuda = (n: number) => setDuda((prev) => (prev === n ? null : n));
+
+  const panel = (n: number) =>
+    onPreguntar && duda === n ? (
+      <div className="no-imprimir mt-2">
+        <PanelConsulta
+          marcador={`¿Qué no te cuadra del paso ${n + 1}? Por ejemplo: «¿por qué sale 12 y no -12?». Puedes añadir una foto de lo que has hecho tú.`}
+          textoBoton="Explícamelo"
+          ocupado={ocupado}
+          onEnviar={(consulta) => {
+            setDuda(null);
+            onPreguntar(n, consulta);
+          }}
+        />
+      </div>
+    ) : null;
 
   return (
     <div>
       {todos ? (
-        <ListaDePasos pasos={pasos} />
+        <>
+          <ListaDePasos
+            pasos={pasos}
+            dudaAbierta={duda}
+            onDuda={onPreguntar ? alternarDuda : undefined}
+          />
+          {duda !== null && panel(duda)}
+        </>
       ) : (
         <div className="print:hidden">
           <div className="min-h-[7rem]" aria-live="polite">
@@ -215,7 +284,12 @@ function Pasos({ pasos }: { pasos: RespuestaEducativa['pasos'] }) {
               <p className="mt-1 text-base font-semibold text-texto">{pasos[indice].titulo}</p>
             )}
             <Texto className="mt-1 text-texto-suave">{pasos[indice].contenido}</Texto>
+            {onPreguntar && (
+              <BotonDuda onClick={() => alternarDuda(indice)} abierto={duda === indice} />
+            )}
           </div>
+
+          {panel(indice)}
 
           <div className="mt-4 flex items-center gap-2">
             <button
@@ -281,8 +355,18 @@ function Pasos({ pasos }: { pasos: RespuestaEducativa['pasos'] }) {
   );
 }
 
-export function VistaRespuesta({ respuesta }: { respuesta: RespuestaEducativa }) {
+export function VistaRespuesta({
+  respuesta,
+  onPreguntar,
+  ocupado = false,
+}: {
+  respuesta: RespuestaEducativa;
+  /** Sin esto no se ofrece preguntar: no habría dónde recibir la respuesta. */
+  onPreguntar?: (consulta: ConsultaSobreRespuesta) => void;
+  ocupado?: boolean;
+}) {
   const pestanas = pestanasDe(respuesta);
+  const [dudaGeneral, setDudaGeneral] = useState(false);
   const [abierta, setAbierta] = useState<ClavePestana>(pestanas[0]?.clave ?? 'pasos');
   const [copiado, setCopiado] = useState(false);
   const c = respuesta.correccion;
@@ -460,7 +544,24 @@ export function VistaRespuesta({ respuesta }: { respuesta: RespuestaEducativa })
             <div className="mt-4">
               {respuesta.pasos.length > 0 && (
                 <Panel activo={abierta === 'pasos'}>
-                  <Pasos pasos={respuesta.pasos} />
+                  <Pasos
+                    pasos={respuesta.pasos}
+                    ocupado={ocupado}
+                    onPreguntar={
+                      onPreguntar
+                        ? (n, consulta) =>
+                            onPreguntar({
+                              ...consulta,
+                              numeroPaso: n + 1,
+                              tituloPaso: respuesta.pasos[n].titulo,
+                              contenidoPaso: respuesta.pasos[n].contenido,
+                              tituloRespuesta: respuesta.titulo,
+                              enunciado: respuesta.queNosPiden || respuesta.titulo,
+                              resultado: respuesta.resultado,
+                            })
+                        : undefined
+                    }
+                  />
                 </Panel>
               )}
 
@@ -553,6 +654,17 @@ export function VistaRespuesta({ respuesta }: { respuesta: RespuestaEducativa })
         )}
 
         <div className="no-imprimir mt-4 flex flex-wrap gap-1 border-t border-borde pt-3">
+          {onPreguntar && (
+            <Boton
+              variante="sutil"
+              icono="chat"
+              type="button"
+              onClick={() => setDudaGeneral((v) => !v)}
+              aria-expanded={dudaGeneral}
+            >
+              {dudaGeneral ? 'Cerrar' : 'Preguntar sobre esto'}
+            </Boton>
+          )}
           <Boton variante="sutil" icono="copiar" onClick={() => void copiar()} type="button">
             {copiado ? 'Copiado' : 'Copiar'}
           </Boton>
@@ -560,6 +672,28 @@ export function VistaRespuesta({ respuesta }: { respuesta: RespuestaEducativa })
             Imprimir
           </Boton>
         </div>
+
+        {onPreguntar && dudaGeneral && (
+          <div className="no-imprimir mt-3">
+            <PanelConsulta
+              marcador="¿Qué no te ha quedado claro? Puedes escribir tu duda o tu resultado, y añadir una foto de lo que has hecho."
+              textoBoton="Explícamelo"
+              ocupado={ocupado}
+              onEnviar={(consulta) => {
+                setDudaGeneral(false);
+                onPreguntar({
+                  ...consulta,
+                  numeroPaso: null,
+                  tituloPaso: '',
+                  contenidoPaso: '',
+                  tituloRespuesta: respuesta.titulo,
+                  enunciado: respuesta.queNosPiden || respuesta.titulo,
+                  resultado: respuesta.resultado,
+                });
+              }}
+            />
+          </div>
+        )}
       </div>
     </article>
   );

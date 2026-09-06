@@ -41,6 +41,18 @@ export const esquemaAnalisis = z.object({
   puedeResolverse: z.boolean().catch(false),
   // Prudente por defecto: ante la duda, pipeline completo con verificación.
   esSeguimiento: z.boolean().catch(false),
+  /**
+   * Qué material pide el usuario, cuando lo que quiere es que se lo prepares en
+   * vez de que le resuelvas algo. null si ha traído un ejercicio.
+   */
+  materialSolicitado: z
+    .object({
+      tipo: z.enum(['ejercicios', 'examen', 'resumen', 'ficha', 'test', 'plan_estudio']),
+      tema: texto,
+      cantidad: z.number().int().min(1).max(20).catch(5),
+    })
+    .nullable()
+    .catch(null),
   resumenTarea: texto.catch(''),
 });
 
@@ -131,8 +143,15 @@ export const esquemaPreguntaMaterial = z.object({
   numero: z.number().int().positive().catch(1),
   enunciado: texto,
   puntuacion: z.number().nonnegative().catch(1),
+  /** Planteamiento paso a paso: cómo se resuelve, no sólo qué sale. */
+  pasos: listaTexto,
   solucion: texto.catch(''),
   criterioCorreccion: texto.catch(''),
+  /**
+   * Operaciones en las que se apoya la solución, para que el servidor las
+   * rehaga. Sin esto, la solución de una ficha es una afirmación sin respaldo.
+   */
+  comprobaciones: z.array(esquemaComprobacionNumerica).catch([]),
 });
 
 export const esquemaMaterial = z.object({

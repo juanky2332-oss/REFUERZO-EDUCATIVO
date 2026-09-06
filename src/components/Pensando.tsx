@@ -19,6 +19,7 @@ const ICONO: Record<FasePipeline, NombreIcono> = {
   verificacion: 'igual',
   explicacion: 'libro',
   charla: 'chat',
+  material: 'documento',
   listo: 'comprobado',
 };
 

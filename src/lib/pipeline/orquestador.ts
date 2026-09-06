@@ -39,6 +39,7 @@ import {
   mensajeSinFuenteNormativa,
   type FragmentoCurricular,
 } from '@/lib/curriculum';
+import { cursoConcreto, materiaConcreta } from '@/lib/material';
 import { registro } from '@/lib/observabilidad';
 import {
   detectarPosibleInyeccion,
@@ -56,9 +57,11 @@ import {
   type RespuestaBreve,
   type RespuestaEducativa,
   type ResultadoComprobacionNumerica,
+  type SolicitudMaterial,
   type Verificacion,
 } from '@/lib/types';
 import { comprobarLista } from './comprobar';
+import { generarMaterialVerificado } from './generador';
 
 const MAX_TOKENS_ANALISIS = 2500;
 const MAX_TOKENS_RESOLUCION = 3500;
@@ -362,6 +365,49 @@ export async function* ejecutarPipeline(
           correccionDelMaterial: null,
         },
       };
+      return;
+    }
+
+    // --- Desvío: lo que se pide es material, no resolver un ejercicio --------
+    // «Ponme 5 ejercicios de ecuaciones» no es un problema que resolver. Antes
+    // caía en el resolutor, que devolvía los enunciados metidos en los pasos y
+    // un resultado del tipo «cinco ejercicios proporcionados»: sin soluciones y
+    // sin sentido. Ahora va al generador, que da enunciado, planteamiento y
+    // solución, y pasa por el recálculo aritmético.
+    if (analisis.materialSolicitado) {
+      yield { tipo: 'fase', fase: 'material', estado: 'inicio', etiqueta: FASE_ETIQUETA.material };
+
+      const pedido = analisis.materialSolicitado;
+      const solicitud: SolicitudMaterial = {
+        tipo: pedido.tipo,
+        // Lo que diga el enunciado manda sobre lo que hubiera guardado el
+        // usuario: pedir ecuaciones con «Biología» seleccionado es lo normal,
+        // y generar material de Biología sería absurdo.
+        materia: materiaConcreta(
+          analisis.materia !== 'desconocida' ? analisis.materia : peticion.materia,
+        ),
+        curso: cursoConcreto(analisis.curso !== 'desconocido' ? analisis.curso : peticion.curso),
+        tema: pedido.tema || analisis.tema || textoUsuario.slice(0, 200),
+        cantidad: pedido.cantidad,
+        dias: null,
+      };
+
+      const material = await generarMaterialVerificado(
+        {
+          tipo: solicitud.tipo,
+          materia: solicitud.materia,
+          curso: solicitud.curso,
+          tema: solicitud.tema,
+          nivel: peticion.nivel,
+          numeroPreguntas: solicitud.cantidad,
+          notas: textoUsuario.slice(0, 500),
+          diasDisponibles: null,
+        },
+        nonce,
+      );
+
+      yield { tipo: 'fase', fase: 'material', estado: 'fin', etiqueta: FASE_ETIQUETA.material };
+      yield { tipo: 'material', material, solicitud };
       return;
     }
 

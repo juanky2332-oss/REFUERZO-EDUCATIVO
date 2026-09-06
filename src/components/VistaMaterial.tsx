@@ -2,10 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import { PanelConsulta, type ConsultaEscrita } from './PanelConsulta';
-import { Texto } from './VistaRespuesta';
+import { Texto, esLineaDeFormula } from './VistaRespuesta';
 import { Icono } from './ui/Icono';
-import type { MaterialGenerado, PreguntaMaterial } from '@/lib/ai/schemas';
-import { paraAlumno, puntuacionTotal, type MaterialAlumno } from '@/lib/material';
+import { paraAlumno, puntuacionTotal, type MaterialAlumno, type MaterialVerificado, type PreguntaVerificada } from '@/lib/material';
 
 /**
  * Material generado: ejercicios, examen, test, resumen o plan de estudio.
@@ -28,10 +27,29 @@ export interface ConsultaSobrePregunta extends ConsultaEscrita {
 
 type ModoImpresion = 'sin_soluciones' | 'con_soluciones';
 
+/** «1 puntos» quedaba fatal en una herramienta que corrige a otros. */
+export function puntos(valor: number): string {
+  return valor === 1 ? '1 punto' : `${valor} puntos`;
+}
+
+/**
+ * Preguntas cuyas cuentas no cuadran al rehacerlas en el servidor.
+ *
+ * El generador escribe la ficha de una tacada y no recalcula nada. Esto es lo
+ * que evita que una cuenta mal hecha se estudie como si estuviera bien.
+ */
+export function preguntasQueNoCuadran(material: MaterialVerificado): number[] {
+  return material.preguntas
+    .filter((p) => p.comprobaciones.some((c) => !c.ok))
+    .map((p) => p.numero);
+}
+
 /** Un plan de estudio o un resumen no se corrigen: no se habla de «solución». */
-export function vocabularioDe(material: MaterialGenerado): {
+export function vocabularioDe(material: MaterialVerificado): {
   elemento: string;
   elementos: string;
+  /** Cómo se titula el desarrollo dentro de la solución. */
+  planteamiento: string;
   respuesta: string;
   /** Ya en plural y en minúscula: pegarle una «s» daba «solucións». */
   verTodas: string;
@@ -46,6 +64,7 @@ export function vocabularioDe(material: MaterialGenerado): {
     return {
       elemento: 'sesión',
       elementos: 'sesiones',
+      planteamiento: 'Qué hacer en esta sesión',
       respuesta: 'Cómo sabrás que te ha salido bien',
       verTodas: 'Ver todos los objetivos',
       verRespuesta: 'Ver el objetivo',
@@ -56,6 +75,7 @@ export function vocabularioDe(material: MaterialGenerado): {
     return {
       elemento: 'apartado',
       elementos: 'apartados',
+      planteamiento: 'Las ideas, una a una',
       respuesta: 'Contenido del apartado',
       verTodas: 'Desplegar todos los apartados',
       verRespuesta: 'Ver el contenido',
@@ -65,7 +85,8 @@ export function vocabularioDe(material: MaterialGenerado): {
   return {
     elemento: 'pregunta',
     elementos: 'preguntas',
-    respuesta: 'Solución',
+    planteamiento: 'Cómo se hace, paso a paso',
+    respuesta: 'Resultado',
     verTodas: 'Ver todas las soluciones',
     verRespuesta: 'Ver solución',
     esCuestionario: true,
@@ -77,7 +98,7 @@ export function VistaMaterial({
   onPreguntar,
   ocupado = false,
 }: {
-  material: MaterialGenerado;
+  material: MaterialVerificado;
   /** Sin esto no se ofrece preguntar: no habría dónde recibir la respuesta. */
   onPreguntar?: (consulta: ConsultaSobrePregunta) => void;
   ocupado?: boolean;
@@ -115,7 +136,7 @@ export function VistaMaterial({
             {[
               material.tema,
               `${material.preguntas.length} ${voz.elementos}`,
-              total > 0 ? `${total} puntos` : null,
+              total > 0 ? puntos(total) : null,
               material.duracionMinutos ? `${material.duracionMinutos} min` : null,
             ]
               .filter(Boolean)
@@ -313,7 +334,7 @@ function Pregunta({
   onEnviarConsulta,
   ocupado,
 }: {
-  pregunta: PreguntaMaterial;
+  pregunta: PreguntaVerificada;
   voz: ReturnType<typeof vocabularioDe>;
   abierta: boolean;
   onAlternar: () => void;
@@ -324,6 +345,7 @@ function Pregunta({
   ocupado: boolean;
 }) {
   const idSolucion = `solucion-${pregunta.numero}`;
+  const noCuadra = pregunta.comprobaciones.some((c) => !c.ok);
 
   return (
     <li className="rounded-tarjeta border border-borde bg-superficie">
@@ -338,7 +360,7 @@ function Pregunta({
         <div className="min-w-0 flex-1">
           <p className="whitespace-pre-wrap text-texto">{pregunta.enunciado}</p>
           {pregunta.puntuacion > 0 && (
-            <p className="mt-1 text-xs text-texto-tenue">{pregunta.puntuacion} puntos</p>
+            <p className="mt-1 text-xs text-texto-tenue">{puntos(pregunta.puntuacion)}</p>
           )}
         </div>
 
@@ -377,6 +399,40 @@ function Pregunta({
 
       {abierta && (
         <div id={idSolucion} className="border-t border-borde px-3.5 py-3">
+          {pregunta.pasos.length > 0 && (
+            <div className="mb-2 rounded-xl border border-borde bg-superficie-2 px-3 py-2.5">
+              <p className="text-[0.7rem] font-bold uppercase tracking-[0.09em] text-texto-tenue">
+                {voz.planteamiento}
+              </p>
+              <ol className="mt-1.5 space-y-1.5">
+                {pregunta.pasos.map((paso, n) => (
+                  <li key={n} className="flex gap-2 text-sm text-texto-suave">
+                    <span
+                      aria-hidden="true"
+                      className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md bg-primario-suave text-[0.7rem] font-bold text-primario"
+                    >
+                      {n + 1}
+                    </span>
+                    <span className={esLineaDeFormula(paso) ? 'formula' : ''}>{paso}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {noCuadra && (
+            <p
+              className="mb-2 flex items-start gap-2 rounded-xl border border-aviso/40 bg-aviso-suave px-3 py-2 text-sm text-aviso"
+              role="note"
+            >
+              <Icono nombre="aviso" className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="text-texto-suave">
+                He rehecho las cuentas de esta y no me salen igual. Dale a «Explícamela paso a paso»:
+                esa sí pasa por la comprobación.
+              </span>
+            </p>
+          )}
+
           <div className="rounded-xl border-l-[3px] border-exito bg-exito-suave/60 px-3 py-2.5">
             <p className="text-[0.7rem] font-bold uppercase tracking-[0.09em] text-exito">
               {voz.respuesta}
@@ -514,7 +570,7 @@ function HojaConSoluciones({
   material,
   voz,
 }: {
-  material: MaterialGenerado;
+  material: MaterialVerificado;
   voz: ReturnType<typeof vocabularioDe>;
 }) {
   return (

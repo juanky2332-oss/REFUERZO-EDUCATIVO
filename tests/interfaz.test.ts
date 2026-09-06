@@ -6,9 +6,19 @@ import {
   pestanasDe,
   respuestaComoTexto,
 } from '@/components/VistaRespuesta';
-import { NOMBRE_HERRAMIENTA, historialDe, siguientesPasos } from '@/components/Chat';
-import { vocabularioDe } from '@/components/VistaMaterial';
-import type { MaterialGenerado } from '@/lib/ai/schemas';
+import {
+  NOMBRE_HERRAMIENTA,
+  historialDe,
+  preferenciasQueCorregir,
+  siguientesPasos,
+} from '@/components/Chat';
+import {
+  preguntasQueNoCuadran,
+  puntos,
+  vocabularioDe,
+} from '@/components/VistaMaterial';
+import type { Analisis } from '@/lib/types';
+import type { MaterialVerificado } from '@/lib/material';
 import { repartirArchivos } from '@/lib/cliente/adjuntos';
 import { sesionesParaPlazo } from '@/lib/material';
 import type { RespuestaEducativa } from '@/lib/types';
@@ -205,7 +215,7 @@ describe('historial que viaja al servidor', () => {
       {
         tipo: 'material',
         id: '2',
-        peticion: {
+        solicitud: {
           tipo: 'ejercicios',
           materia: 'matematicas',
           curso: '1eso',
@@ -220,7 +230,7 @@ describe('historial que viaja al servidor', () => {
           tema: 'Fracciones',
           instrucciones: '',
           duracionMinutos: null,
-          preguntas: [{ numero: 1, enunciado: 'Suma', puntuacion: 1, solucion: '', criterioCorreccion: '' }],
+          preguntas: [{ numero: 1, enunciado: 'Suma', puntuacion: 1, pasos: [], solucion: '', criterioCorreccion: '', comprobaciones: [] }],
           loQueHayQueAprender: [],
           notasDidacticas: [],
         },
@@ -255,7 +265,7 @@ describe('reparto de fotos adjuntas', () => {
 });
 
 describe('cómo se llama cada cosa en el material', () => {
-  const base: MaterialGenerado = {
+  const base: MaterialVerificado = {
     titulo: 'Práctica de fracciones',
     materia: 'matematicas',
     curso: '1eso',
@@ -263,7 +273,7 @@ describe('cómo se llama cada cosa en el material', () => {
     instrucciones: '',
     duracionMinutos: null,
     preguntas: [
-      { numero: 1, enunciado: 'Suma 1/2 + 1/4', puntuacion: 2, solucion: '3/4', criterioCorreccion: '' },
+      { numero: 1, enunciado: 'Suma 1/2 + 1/4', puntuacion: 2, pasos: ['Igualo denominadores: 2/4 + 1/4.'], solucion: '3/4', criterioCorreccion: '', comprobaciones: [] },
     ],
     loQueHayQueAprender: [],
     notasDidacticas: [],
@@ -300,7 +310,7 @@ describe('cómo se llama cada cosa en el material', () => {
 });
 
 describe('el plural del botón «ver todas» está escrito, no fabricado', () => {
-  const base: MaterialGenerado = {
+  const base: MaterialVerificado = {
     titulo: 'Práctica',
     materia: 'matematicas',
     curso: '1eso',
@@ -308,7 +318,7 @@ describe('el plural del botón «ver todas» está escrito, no fabricado', () =>
     instrucciones: '',
     duracionMinutos: null,
     preguntas: [
-      { numero: 1, enunciado: 'Suma', puntuacion: 1, solucion: '3/4', criterioCorreccion: '' },
+      { numero: 1, enunciado: 'Suma', puntuacion: 1, pasos: [], solucion: '3/4', criterioCorreccion: '', comprobaciones: [] },
     ],
     loQueHayQueAprender: [],
     notasDidacticas: [],
@@ -345,5 +355,103 @@ describe('qué se ofrece después de cada material', () => {
         expect(NOMBRE_HERRAMIENTA[siguiente]).toBeTruthy();
       }
     }
+  });
+});
+
+describe('puntuación en singular y en plural', () => {
+  it('nunca escribe «1 puntos» en una herramienta que corrige a otros', () => {
+    expect(puntos(1)).toBe('1 punto');
+    expect(puntos(2)).toBe('2 puntos');
+    expect(puntos(2.5)).toBe('2.5 puntos');
+  });
+});
+
+describe('preguntas cuyas cuentas no cuadran', () => {
+  const pregunta = (numero: number, ok: boolean) => ({
+    numero,
+    enunciado: 'Resuelve',
+    puntuacion: 1,
+    pasos: [],
+    solucion: 'x = 4',
+    criterioCorreccion: '',
+    comprobaciones: [
+      {
+        descripcion: 'Sustituyo',
+        expresion: '2+2',
+        valorEsperado: 4,
+        tolerancia: 0.001,
+        ok,
+        valorCalculado: ok ? 4 : 5,
+        error: ok ? null : 'No cuadra',
+      },
+    ],
+  });
+
+  const material = (preguntas: ReturnType<typeof pregunta>[]): MaterialVerificado => ({
+    titulo: 'Ficha',
+    materia: 'matematicas',
+    curso: '1eso',
+    tema: 'Ecuaciones',
+    instrucciones: '',
+    duracionMinutos: null,
+    preguntas,
+    loQueHayQueAprender: [],
+    notasDidacticas: [],
+  });
+
+  it('señala sólo las que fallan', () => {
+    expect(preguntasQueNoCuadran(material([pregunta(1, true), pregunta(2, false)]))).toEqual([2]);
+  });
+
+  it('no alarma cuando todo cuadra', () => {
+    expect(preguntasQueNoCuadran(material([pregunta(1, true)]))).toEqual([]);
+  });
+
+  it('una pregunta sin operaciones comprobables no cuenta como fallo', () => {
+    const conceptual = { ...pregunta(1, true), comprobaciones: [] };
+    expect(preguntasQueNoCuadran(material([conceptual]))).toEqual([]);
+  });
+});
+
+describe('el selector se corrige con lo que se detecta de verdad', () => {
+  const analisis = (materia: Analisis['materia'], curso: Analisis['curso']): Analisis => ({
+    intencion: 'resolver',
+    materia,
+    curso,
+    tema: null,
+    enunciado: null,
+    datos: [],
+    respuestaDelAlumno: null,
+    calidadImagen: null,
+    ambiguedades: [],
+    bloqueantes: [],
+    puedeResolverse: true,
+    esSeguimiento: false,
+    materialSolicitado: null,
+    resumenTarea: '',
+  });
+
+  it('corrige la materia cuando el enunciado dice otra cosa', () => {
+    const cambios = preferenciasQueCorregir(analisis('matematicas', '2eso'), {
+      materia: 'biologia_geologia',
+      curso: '2eso',
+    });
+    expect(cambios).toEqual({ materia: 'matematicas' });
+  });
+
+  it('nunca borra una elección del usuario para dejarla en «no lo sé»', () => {
+    const cambios = preferenciasQueCorregir(analisis('desconocida', 'desconocido'), {
+      materia: 'biologia_geologia',
+      curso: '1eso',
+    });
+    expect(cambios).toEqual({});
+  });
+
+  it('no toca nada si ya coincide', () => {
+    const cambios = preferenciasQueCorregir(analisis('matematicas', '1eso'), {
+      materia: 'matematicas',
+      curso: '1eso',
+    });
+    expect(cambios).toEqual({});
   });
 });

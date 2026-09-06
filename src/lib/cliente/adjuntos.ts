@@ -38,25 +38,23 @@ export interface Adjuntos {
 export function repartirArchivos(
   yaHay: number,
   entrantes: number,
+  maximo: number = MAXIMO_IMAGENES,
 ): { cabe: number; aviso: string | null } {
-  const hueco = MAXIMO_IMAGENES - yaHay;
+  const hueco = maximo - yaHay;
 
   if (hueco <= 0) {
-    return {
-      cabe: 0,
-      aviso: `Puedes mandar como máximo ${MAXIMO_IMAGENES} fotos en un mensaje.`,
-    };
+    return { cabe: 0, aviso: `Puedes mandar como máximo ${maximo} fotos.` };
   }
   if (entrantes > hueco) {
     return {
       cabe: hueco,
-      aviso: `Sólo he cogido ${hueco}: el máximo son ${MAXIMO_IMAGENES} fotos por mensaje.`,
+      aviso: `Sólo he cogido ${hueco}: el máximo son ${maximo} fotos.`,
     };
   }
   return { cabe: entrantes, aviso: null };
 }
 
-export function useAdjuntos(): Adjuntos {
+export function useAdjuntos(maximo: number = MAXIMO_IMAGENES): Adjuntos {
   const [imagenes, setImagenes] = useState<ImagenPreparada[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [preparando, setPreparando] = useState(false);
@@ -83,7 +81,7 @@ export function useAdjuntos(): Adjuntos {
       return;
     }
 
-    const { cabe, aviso } = repartirArchivos(actuales.current.length, fotos.length);
+    const { cabe, aviso } = repartirArchivos(actuales.current.length, fotos.length, maximo);
     if (cabe === 0) {
       setError(aviso);
       return;
@@ -103,8 +101,8 @@ export function useAdjuntos(): Adjuntos {
 
     setPreparando(false);
     setError(aviso ?? fallo);
-    if (nuevas.length > 0) guardar((prev) => [...prev, ...nuevas].slice(0, MAXIMO_IMAGENES));
-  }, [guardar]);
+    if (nuevas.length > 0) guardar((prev) => [...prev, ...nuevas].slice(0, maximo));
+  }, [guardar, maximo]);
 
   const quitar = useCallback(
     (id: string) => {

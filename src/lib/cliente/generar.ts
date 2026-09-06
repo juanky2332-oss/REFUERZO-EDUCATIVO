@@ -16,8 +16,13 @@ export type ResultadoMaterial =
   | { ok: false; error: string };
 
 export async function generarMaterial(
-  peticion: Omit<PeticionGenerate, 'nivel' | 'numeroPreguntas' | 'notas' | 'diasDisponibles'> &
-    Partial<Pick<PeticionGenerate, 'nivel' | 'numeroPreguntas' | 'notas' | 'diasDisponibles'>>,
+  peticion: Omit<
+    PeticionGenerate,
+    'nivel' | 'numeroPreguntas' | 'notas' | 'diasDisponibles' | 'libro'
+  > &
+    Partial<
+      Pick<PeticionGenerate, 'nivel' | 'numeroPreguntas' | 'notas' | 'diasDisponibles' | 'libro'>
+    >,
   senal?: AbortSignal,
 ): Promise<ResultadoMaterial> {
   try {

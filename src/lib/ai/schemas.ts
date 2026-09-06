@@ -194,9 +194,50 @@ export const esquemaEjercicioDeMaterial = z.object({
 
 export type EjercicioDeMaterial = z.infer<typeof esquemaEjercicioDeMaterial>;
 
+// --- El libro del alumno -----------------------------------------------------
+
+/**
+ * Ficha de las páginas que el alumno ha subido de su libro o sus apuntes.
+ *
+ * Es la única forma honesta de que las respuestas «vayan de la mano» de una
+ * editorial concreta: trabajando sobre el texto real que tiene delante. No
+ * existe ninguna base de datos de libros de texto dentro de esta aplicación, y
+ * fingir que se conoce uno sería inventarse unidades, páginas y ejercicios.
+ */
+export const esquemaFichaLibro = z.object({
+  titulo: texto.catch('Mi libro'),
+  materia: z.enum(MATERIAS).catch('desconocida'),
+  curso: z.enum(CURSOS).catch('desconocido'),
+  /** Tal como el libro lo llama, no como lo llamaría yo. */
+  tema: texto.catch(''),
+  /** Contenido transcrito o resumido con fidelidad, sin añadir nada. */
+  contenido: texto.catch(''),
+  /** Cómo resuelve el libro: notación, orden de los pasos, atajos que usa. */
+  metodo: listaTexto,
+  /** Términos y símbolos tal como los escribe el libro. */
+  vocabulario: listaTexto,
+  /** Lo que no se ha podido leer con seguridad. */
+  advertencias: listaTexto,
+});
+
+export type FichaLibro = z.infer<typeof esquemaFichaLibro>;
+
+export const esquemaPeticionApuntes = z.object({
+  imagenes: z.array(esquemaImagenEntrante).min(1).max(8),
+  curso: z.enum(CURSOS).optional().default('desconocido'),
+  materia: z.enum(MATERIAS).optional().default('desconocida'),
+  /** Editorial o nombre que el alumno le dé, sólo para titular la ficha. */
+  editorial: z.string().max(120).optional().default(''),
+});
+
+export type PeticionApuntes = z.infer<typeof esquemaPeticionApuntes>;
+
+
 export const esquemaPeticionSolve = z.object({
   texto: z.string().max(8000).optional().default(''),
   ejercicio: esquemaEjercicioDeMaterial.nullable().optional().default(null),
+  /** El libro del alumno, si lo ha subido. Manda sobre el criterio propio. */
+  libro: esquemaFichaLibro.nullable().optional().default(null),
   imagenes: z.array(esquemaImagenEntrante).max(4).optional().default([]),
   nivel: z.enum(['A', 'B', 'C', 'D']).optional().default('B'),
   curso: z.enum(CURSOS).optional().default('desconocido'),
@@ -225,6 +266,8 @@ export const esquemaPeticionGenerate = z.object({
   notas: z.string().max(2000).optional().default(''),
   /** Días que quedan hasta el examen. Ordena las sesiones de un plan de estudio. */
   diasDisponibles: z.number().int().min(1).max(120).nullable().optional().default(null),
+  /** El libro del alumno: el material generado tiene que encajar con él. */
+  libro: esquemaFichaLibro.nullable().optional().default(null),
 });
 
 export type PeticionGenerate = z.infer<typeof esquemaPeticionGenerate>;

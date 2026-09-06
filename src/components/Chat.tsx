@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BurbujaBreve } from './BurbujaBreve';
 import { PanelHerramienta, type PeticionHerramienta } from './PanelHerramienta';
+import { PanelLibro } from './PanelLibro';
 import { Pensando } from './Pensando';
 import { Redactor, type Herramienta } from './Redactor';
 import { VistaMaterial, type ConsultaSobrePregunta } from './VistaMaterial';
@@ -13,6 +14,7 @@ import { useAdjuntos } from '@/lib/cliente/adjuntos';
 import type { ImagenPreparada } from '@/lib/cliente/imagenes';
 import { generarMaterial } from '@/lib/cliente/generar';
 import type { MaterialVerificado } from '@/lib/material';
+import { useLibro } from '@/lib/cliente/libro';
 import { usePreferencias } from '@/lib/cliente/preferencias';
 import type {
   Analisis,
@@ -45,6 +47,7 @@ type Entrada =
   | { tipo: 'necesita_datos'; id: string; mensaje: string; analisis: Analisis }
   | { tipo: 'error'; id: string; mensaje: string }
   | { tipo: 'herramienta'; id: string; herramienta: Herramienta }
+  | { tipo: 'libro'; id: string }
   | {
       tipo: 'material';
       id: string;
@@ -128,14 +131,6 @@ export function resumirParaHistorial(r: RespuestaEducativa): string {
 }
 
 /**
- * Convierte el hilo en el historial que viaja al servidor.
- *
- * Sólo van los últimos ocho turnos: es lo que hace falta para entender «no
- * entiendo el paso 2» y lo que evita que cada mensaje arrastre la conversación
- * entera. Las tarjetas de material no entran: ocupan muchísimo y no cambian el
- * sentido de una duda sobre un ejercicio.
- */
-/**
  * Qué preferencias hay que corregir a la vista de lo que el usuario ha escrito.
  *
  * El selector guarda lo último que se eligió, y ahí se queda. Pedir ecuaciones
@@ -171,6 +166,14 @@ export function preferenciasQueCorregir(
   return cambios;
 }
 
+/**
+ * Convierte el hilo en el historial que viaja al servidor.
+ *
+ * Sólo van los últimos ocho turnos: es lo que hace falta para entender «no
+ * entiendo el paso 2» y lo que evita que cada mensaje arrastre la conversación
+ * entera. Las tarjetas de material no entran: ocupan muchísimo y no cambian el
+ * sentido de una duda sobre un ejercicio.
+ */
 export function historialDe(entradas: Entrada[]): MensajeHistorial[] {
   const h: MensajeHistorial[] = [];
 
@@ -189,6 +192,7 @@ export function Chat() {
   const [texto, setTexto] = useState('');
   const adjuntos = useAdjuntos();
   const [preferencias, guardarPreferencias] = usePreferencias();
+  const { libro, guardar: guardarLibro } = useLibro();
 
   const [entradas, setEntradas] = useState<Entrada[]>([]);
   const [enCurso, setEnCurso] = useState(false);
@@ -252,6 +256,7 @@ export function Chat() {
       const cuerpo = {
         texto: mensaje,
         ejercicio: envio.ejercicio ?? null,
+        libro,
         imagenes: envio.imagenes.map((i) => ({
           mime: i.mime,
           base64: i.base64,
@@ -344,7 +349,7 @@ export function Chat() {
         abortar.current = null;
     }
     },
-    [anadirEntrada, entradas, ocupado, preferencias],
+    [anadirEntrada, entradas, libro, ocupado, preferencias],
   );
 
   /** Envío desde la barra de escritura. */
@@ -392,6 +397,13 @@ export function Chat() {
     [],
   );
 
+  const abrirLibro = useCallback(() => {
+    setEntradas((prev) => [
+      ...prev.filter((e) => e.tipo !== 'libro'),
+      { tipo: 'libro', id: nuevoId() },
+    ]);
+  }, []);
+
   const cerrarHerramienta = useCallback((id: string) => {
     setEntradas((prev) => prev.filter((e) => e.id !== id));
   }, []);
@@ -411,6 +423,7 @@ export function Chat() {
           nivel: preferencias.nivel,
           numeroPreguntas: peticion.cantidad,
           diasDisponibles: peticion.dias,
+          libro,
         },
         control.signal,
       );
@@ -440,7 +453,7 @@ export function Chat() {
         ];
       });
     },
-    [preferencias.nivel],
+    [libro, preferencias.nivel],
   );
 
   /**
@@ -631,6 +644,16 @@ export function Chat() {
                   />
                 )}
 
+                {e.tipo === 'libro' && (
+                  <PanelLibro
+                    libro={libro}
+                    curso={preferencias.curso}
+                    materia={preferencias.materia}
+                    onGuardar={guardarLibro}
+                    onCerrar={() => cerrarHerramienta(e.id)}
+                  />
+                )}
+
                 {e.tipo === 'material' && (
                   <div>
                     <div className="hoja rounded-tarjeta border border-borde bg-superficie p-4 shadow-[var(--sombra)] sm:p-5">
@@ -689,6 +712,8 @@ export function Chat() {
         preferencias={preferencias}
         onPreferencias={guardarPreferencias}
         onHerramienta={abrirHerramienta}
+        onLibro={abrirLibro}
+        libro={libro ? libro.titulo : null}
         marcador={marcador}
       />
     </div>

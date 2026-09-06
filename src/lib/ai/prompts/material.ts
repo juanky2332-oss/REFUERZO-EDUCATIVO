@@ -4,7 +4,8 @@
  */
 
 import { NIVEL_DESCRIPCION, type Nivel } from '@/lib/types';
-import { REGLAS_NUCLEO } from './base';
+import { REGLAS_NUCLEO, bloqueSaberes } from './base';
+import { INSTRUCCION_LIBRO, bloqueLibro } from './libro';
 import type { PeticionGenerate } from '../schemas';
 
 const DESCRIPCION_TIPO: Record<PeticionGenerate['tipo'], string> = {
@@ -30,7 +31,17 @@ export function systemMaterial(p: PeticionGenerate): string {
 TU TAREA: generar ${DESCRIPCION_TIPO[p.tipo]}
 
 El material es para ${p.curso === '1eso' ? '1.º de ESO' : p.curso === '2eso' ? '2.º de ESO' : 'Educación Secundaria Obligatoria'},
-nivel de adaptación ${p.nivel} (${n.titulo}: ${n.detalle}).
+nivel de adaptación ${p.nivel} (${n.titulo}: ${n.detalle}).${bloqueSaberes(p.curso, p.materia)}${
+    p.libro
+      ? `
+
+${INSTRUCCION_LIBRO}
+
+--- LIBRO O APUNTES DEL ALUMNO ---
+${bloqueLibro(p.libro)}
+--- FIN ---`
+      : ''
+  }
 
 REGLAS DEL MATERIAL:
 - Contenido ORIGINAL. No reproduzcas ejercicios de una editorial concreta ni digas de qué libro o página sale algo.

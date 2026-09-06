@@ -16,6 +16,7 @@
 
 import { pedirJSON } from '@/lib/ai/pedir';
 import { bloqueContexto, AVISO_INYECCION } from '@/lib/ai/prompts/base';
+import { INSTRUCCION_LIBRO, bloqueLibro } from '@/lib/ai/prompts/libro';
 import {
   SYSTEM_ANALISIS,
   SYSTEM_RESOLUCION,
@@ -37,6 +38,7 @@ import {
   hayProveedorCurriculo,
   buscarEnCurriculo,
   mensajeSinFuenteNormativa,
+  NORMAS_CURRICULO,
   type FragmentoCurricular,
 } from '@/lib/curriculum';
 import { cursoConcreto, materiaConcreta } from '@/lib/material';
@@ -248,11 +250,30 @@ export async function* ejecutarPipeline(
   }
 
   const sospechaInyeccion = detectarPosibleInyeccion(textoUsuario);
-  const contexto = bloqueContexto({
-    curso: peticion.curso,
-    materia: peticion.materia,
-    nivel: peticion.nivel,
-  });
+
+  /**
+   * Contexto que va en TODAS las llamadas de esta consulta.
+   *
+   * El libro se suma aquí y no en una fase concreta a propósito: si el
+   * analizador leyera el enunciado con la notación del libro pero el resolutor
+   * lo resolviera con otra, el alumno recibiría una mezcla que no se parece ni
+   * a su clase ni a nada.
+   */
+  const contexto = [
+    bloqueContexto({
+      curso: peticion.curso,
+      materia: peticion.materia,
+      nivel: peticion.nivel,
+    }),
+    peticion.libro
+      ? [
+          INSTRUCCION_LIBRO,
+          envolverNoConfiable('libro_del_alumno', bloqueLibro(peticion.libro), nonce),
+        ].join('\n\n')
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 
   try {
     // --- FASE 1: ANÁLISIS ---------------------------------------------------
@@ -328,7 +349,8 @@ export async function* ejecutarPipeline(
     let fragmentos: FragmentoCurricular[] = [];
     if (esNormativa && hayProveedorCurriculo()) {
       fragmentos = await buscarEnCurriculo(textoUsuario || analisis.enunciado || '', {
-        materia: analisis.materia,
+        materia: analisis.materia !== 'desconocida' ? analisis.materia : peticion.materia,
+        curso: analisis.curso !== 'desconocido' ? analisis.curso : peticion.curso,
       });
     }
 
@@ -342,10 +364,18 @@ export async function* ejecutarPipeline(
           datos: [],
           comoLoHacemos:
             'Para responder a esto hace falta el texto vigente de la norma. Sin él, cualquier respuesta mía sería una suposición.',
-          pasos: portales.map((p) => ({
-            titulo: p.nombre,
-            contenido: `${p.paraQue}\n${p.url}`,
-          })),
+          // La norma concreta primero: mandar a alguien al BORM entero para que
+          // encuentre su currículo es lo mismo que no decirle nada.
+          pasos: [
+            ...NORMAS_CURRICULO.map((n) => ({
+              titulo: n.titulo,
+              contenido: `${n.publicado}. ${n.nota}\n${n.url}`,
+            })),
+            ...portales.map((p) => ({
+              titulo: p.nombre,
+              contenido: `${p.paraQue}\n${p.url}`,
+            })),
+          ],
           resultado: mensaje,
           comprobacion:
             'No se ha realizado ninguna comprobación porque no hay fuente que comprobar.',
@@ -402,6 +432,7 @@ export async function* ejecutarPipeline(
           numeroPreguntas: solicitud.cantidad,
           notas: textoUsuario.slice(0, 500),
           diasDisponibles: null,
+          libro: peticion.libro,
         },
         nonce,
       );

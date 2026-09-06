@@ -16,6 +16,9 @@ import { consumir, reiniciarLimites } from '@/lib/security/rate-limit';
 import { extraerObjetoJSON } from '@/lib/ai/json';
 import { cuerpoOpenAI, esModeloRazonador, parametroNoSoportado } from '@/lib/ai/provider';
 import { paraAlumno } from '@/lib/material';
+import { FUENTE_CURRICULO, SABERES, avisoDeCombinacion, saberesDe } from '@/lib/curriculum/murcia';
+import { proveedorMurcia } from '@/lib/curriculum';
+import { interpretarLibro } from '@/lib/cliente/libro';
 import { dependeDeNormativa } from '@/lib/curriculum';
 
 const b64 = (bytes: number[]) => Buffer.from(Uint8Array.from(bytes)).toString('base64');
@@ -279,5 +282,99 @@ describe('detección de consultas que dependen de normativa', () => {
   it('no confunde un ejercicio normal con una consulta normativa', () => {
     expect(dependeDeNormativa('Resuelve 3x + 2 = 14')).toBe(false);
     expect(dependeDeNormativa('Explícame la fotosíntesis')).toBe(false);
+  });
+});
+
+describe('currículo de la Región de Murcia', () => {
+  it('cada bloque de saberes trae texto de verdad, no un hueco', () => {
+    expect(SABERES.length).toBeGreaterThanOrEqual(4);
+    for (const s of SABERES) {
+      expect(s.saberes.length).toBeGreaterThan(1000);
+      expect(s.saberes).toContain('Saberes básicos');
+    }
+  });
+
+  it('cubre las materias que cada curso tiene en Murcia', () => {
+    expect(saberesDe('matematicas', '1eso')).not.toBeNull();
+    expect(saberesDe('matematicas', '2eso')).not.toBeNull();
+    expect(saberesDe('biologia_geologia', '1eso')).not.toBeNull();
+    expect(saberesDe('fisica_quimica', '2eso')).not.toBeNull();
+  });
+
+  it('no inventa saberes para las combinaciones que no existen', () => {
+    // Segun el propio decreto, Biologia y Geologia no se desarrolla en 2.º ni
+    // Fisica y Quimica en 1.º. Devolver algo aqui seria fabricarlo.
+    expect(saberesDe('biologia_geologia', '2eso')).toBeNull();
+    expect(saberesDe('fisica_quimica', '1eso')).toBeNull();
+  });
+
+  it('avisa de la combinación imposible sin bloquearla', () => {
+    const aviso = avisoDeCombinacion('biologia_geologia', '2eso');
+    expect(aviso).toContain('no se da en 2.º');
+    expect(avisoDeCombinacion('matematicas', '1eso')).toBeNull();
+    expect(avisoDeCombinacion('matematicas', 'desconocido')).toBeNull();
+  });
+
+  it('la fuente citable apunta al BORM y lleva fecha de consulta', () => {
+    expect(FUENTE_CURRICULO.url).toContain('borm.es');
+    expect(FUENTE_CURRICULO.titulo).toContain('235/2022');
+    expect(FUENTE_CURRICULO.consultadaEn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('el proveedor devuelve el bloque del curso con su fuente', async () => {
+    const r = await proveedorMurcia.buscar('qué entra', {
+      materia: 'matematicas',
+      curso: '1eso',
+    });
+    expect(r).toHaveLength(1);
+    expect(r[0].fuente.url).toBe(FUENTE_CURRICULO.url);
+    expect(r[0].texto).toContain('Sentido numérico');
+  });
+
+  it('no devuelve nada para lo que no se ha incorporado', async () => {
+    const r = await proveedorMurcia.buscar('cuántos suspensos para repetir', {
+      materia: 'biologia_geologia',
+      curso: '2eso',
+    });
+    expect(r).toEqual([]);
+  });
+});
+
+describe('el libro guardado en el navegador', () => {
+  const valido = {
+    titulo: 'Unidad 5',
+    materia: 'matematicas',
+    curso: '2eso',
+    tema: 'Ecuaciones',
+    contenido: 'Método de la balanza. Primer y segundo miembro.',
+    metodo: ['Agrupamos términos'],
+    vocabulario: ['primer miembro'],
+    advertencias: [],
+  };
+
+  it('recupera una ficha válida', () => {
+    expect(interpretarLibro(JSON.stringify(valido))?.tema).toBe('Ecuaciones');
+  });
+
+  it('descarta una ficha sin contenido en vez de decir que sigue un libro vacío', () => {
+    expect(interpretarLibro(JSON.stringify({ ...valido, contenido: '' }))).toBeNull();
+    expect(interpretarLibro(JSON.stringify({ ...valido, contenido: '   ' }))).toBeNull();
+    expect(interpretarLibro(JSON.stringify({ titulo: 'Solo un titulo' }))).toBeNull();
+  });
+
+  it('resiste un dato corrupto, vacío o nulo', () => {
+    expect(interpretarLibro(null)).toBeNull();
+    expect(interpretarLibro('')).toBeNull();
+    expect(interpretarLibro('{no es json')).toBeNull();
+    expect(interpretarLibro('"una cadena"')).toBeNull();
+    expect(interpretarLibro('[1,2,3]')).toBeNull();
+  });
+
+  it('no propaga listas que no son listas de texto', () => {
+    const raro = interpretarLibro(
+      JSON.stringify({ ...valido, metodo: 'no es una lista', vocabulario: [1, 2, null] }),
+    );
+    expect(raro?.metodo).toEqual([]);
+    expect(raro?.vocabulario).toEqual([]);
   });
 });

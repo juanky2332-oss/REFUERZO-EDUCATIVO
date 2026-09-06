@@ -5,6 +5,7 @@
  * analizador, el resolutor, el revisor y el explicador.
  */
 
+import { saberesDe, FUENTE_CURRICULO } from '@/lib/curriculum/murcia';
 import { NIVEL_DESCRIPCION, type Curso, type Materia, type Nivel } from '@/lib/types';
 
 export const REGLAS_NUCLEO = `Eres el motor de REFUERZO EDUCATIVO, una herramienta de apoyo escolar para alumnado de 1.º y 2.º de ESO en España (contexto principal: Región de Murcia).
@@ -87,7 +88,40 @@ export function bloqueContexto(params: {
 - Materia declarada por el usuario: ${nombreMateria}
 - Nivel de adaptación pedagógica solicitado: ${nivel} (${n.titulo}) — ${n.detalle}
 
-El curso y la materia declarados son una pista, no una certeza: si el contenido real indica otra cosa, dilo.`;
+El curso y la materia declarados son una pista, no una certeza: si el contenido real indica otra cosa, dilo.${bloqueSaberes(curso, materia)}`;
+}
+
+/**
+ * Saberes básicos del curso y la materia, tal como los fija el currículo de
+ * Murcia.
+ *
+ * Va en el contexto de todas las fases porque es lo que fija el ALCANCE: si al
+ * alumno de 1.º le explicas la ecuación de segundo grado, técnicamente no le
+ * mientes, pero le mandas a estudiar algo que no le van a preguntar. El texto
+ * es el del decreto, no una interpretación, y por eso puede ir dentro del
+ * bloque de sistema sin envolver: no lo ha escrito el usuario.
+ */
+export function bloqueSaberes(curso: Curso, materia: Materia): string {
+  const s = saberesDe(materia, curso);
+  if (!s) return '';
+
+  return `
+
+QUÉ ENTRA EN ESTE CURSO. Lo siguiente es el texto del ${FUENTE_CURRICULO.titulo.split(',')[0]}, que fija el
+currículo de la ESO en la Región de Murcia. Es lo que se da en clase y a lo que se ciñe cualquier libro de texto
+que se use en la Región.
+
+Úsalo así:
+- Para AJUSTAR EL ALCANCE: explica y propón lo que corresponde a este curso. No metas contenido de cursos
+  posteriores aunque lo sepas; si el alumno pregunta por algo que no está aquí, respóndele igualmente pero dile
+  que eso se ve más adelante.
+- Para AJUSTAR EL VOCABULARIO: usa los términos tal como aparecen aquí.
+- NO lo cites como si fuera el libro del alumno, y NO afirmes qué unidad o qué página de ningún libro concreto
+  corresponde a cada saber: eso no lo sabes.
+
+--- SABERES BÁSICOS ---
+${s.saberes}
+--- FIN DE LOS SABERES BÁSICOS ---`;
 }
 
 /** Aviso extra cuando el texto de entrada contiene patrones típicos de inyección. */

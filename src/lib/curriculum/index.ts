@@ -17,7 +17,8 @@
  * portal oficial. Eso es intencionado (reglas 73 y 74).
  */
 
-import type { Fuente, Materia } from '@/lib/types';
+import type { Curso, Fuente, Materia } from '@/lib/types';
+import { FUENTE_CURRICULO, SABERES } from './murcia';
 
 export interface PortalOficial {
   clave: string;
@@ -78,6 +79,43 @@ export const PORTALES_OFICIALES: PortalOficial[] = [
 ];
 
 /**
+ * Norma que fija el currículo de la ESO en la Región de Murcia.
+ *
+ * Esto NO es el contenido de la norma —eso sigue sin codificarse a mano, y por
+ * los mismos motivos—: es la referencia para poder mandar al usuario al sitio
+ * correcto en vez de soltarle un «mira el BORM». La diferencia importa: decir
+ * qué decreto está vigente es verificable de un vistazo; decir qué pone dentro,
+ * no.
+ *
+ * Comprobado el 2026-09-06 contra el BORM. Si alguien lee esto mucho después,
+ * conviene revisar que no haya una modificación más reciente.
+ */
+export const NORMAS_CURRICULO: {
+  titulo: string;
+  organismo: string;
+  url: string;
+  publicado: string;
+  nota: string;
+}[] = [
+  {
+    titulo:
+      'Decreto n.º 235/2022, de 7 de diciembre, por el que se establece la ordenación y el currículo de la Educación Secundaria Obligatoria en la Comunidad Autónoma de la Región de Murcia',
+    organismo: 'Comunidad Autónoma de la Región de Murcia',
+    url: 'https://www.borm.es/services/anuncio/ano/2022/numero/6346/pdf?id=813663',
+    publicado: 'BORM n.º 283, de 9 de diciembre de 2022',
+    nota: 'Currículo autonómico de la ESO en Murcia. Es la fuente de qué se da en cada curso.',
+  },
+  {
+    titulo:
+      'Decreto n.º 158/2024, de 1 de agosto, por el que se modifica el Decreto n.º 235/2022',
+    organismo: 'Comunidad Autónoma de la Región de Murcia',
+    url: 'https://www.borm.es/services/anuncio/ano/2024/numero/4052/pdf?id=829230',
+    publicado: 'BORM n.º 181, de 5 de agosto de 2024',
+    nota: 'Modificación posterior del currículo. Hay que leerla junto al Decreto 235/2022.',
+  },
+];
+
+/**
  * Palabras que indican que la respuesta depende de normativa o de información
  * oficial que puede haber cambiado (reglas 7 y 8).
  */
@@ -120,7 +158,10 @@ export function dependeDeNormativa(texto: string): boolean {
 export interface ProveedorCurriculo {
   readonly nombre: string;
   /** Devuelve fragmentos con su fuente, o lista vacía si no encuentra nada. */
-  buscar(consulta: string, opciones?: { materia?: Materia }): Promise<FragmentoCurricular[]>;
+  buscar(
+    consulta: string,
+    opciones?: { materia?: Materia; curso?: Curso },
+  ): Promise<FragmentoCurricular[]>;
 }
 
 export interface FragmentoCurricular {
@@ -128,7 +169,55 @@ export interface FragmentoCurricular {
   fuente: Fuente;
 }
 
-let proveedorActivo: ProveedorCurriculo | null = null;
+/**
+ * Proveedor con el currículo de Murcia ya descargado.
+ *
+ * Se busca por materia y curso, no por palabras: el texto del decreto es
+ * abstracto («sentido numérico») y una búsqueda por término fallaría justo en
+ * las preguntas que importan. Lo que devuelve es el bloque entero de saberes
+ * del curso, que es lo que hace falta para decir qué entra y qué no.
+ *
+ * Cubre 1.º y 2.º de ESO en las tres materias de esta aplicación. Para
+ * cualquier otra cosa —promoción, titulación, número de suspensos— devuelve
+ * vacío a propósito: eso está en otras partes de la norma que no se han
+ * incorporado, y responderlo de memoria es justo lo que no se hace aquí.
+ */
+export const proveedorMurcia: ProveedorCurriculo = {
+  nombre: 'Currículo ESO de la Región de Murcia (Decreto 235/2022)',
+  async buscar(_consulta, opciones) {
+    const coincidencias = SABERES.filter(
+      (s) =>
+        (!opciones?.materia || s.materia === opciones.materia) &&
+        (!opciones?.curso || s.curso === opciones.curso),
+    );
+
+    return coincidencias.map((s) => ({
+      texto: s.saberes,
+      fuente: {
+        titulo: FUENTE_CURRICULO.titulo,
+        organismo: FUENTE_CURRICULO.organismo,
+        url: FUENTE_CURRICULO.url,
+        consultadaEn: FUENTE_CURRICULO.consultadaEn,
+        queAfirma: `Saberes básicos de ${nombreMateria(s.materia)} en ${nombreCurso(s.curso)}.`,
+      },
+    }));
+  },
+};
+
+function nombreMateria(m: Materia): string {
+  if (m === 'matematicas') return 'Matemáticas';
+  if (m === 'fisica_quimica') return 'Física y Química';
+  if (m === 'biologia_geologia') return 'Biología y Geología';
+  return 'la materia';
+}
+
+function nombreCurso(c: Curso): string {
+  if (c === '1eso') return '1.º de ESO';
+  if (c === '2eso') return '2.º de ESO';
+  return 'la etapa';
+}
+
+let proveedorActivo: ProveedorCurriculo | null = proveedorMurcia;
 
 /** Punto de extensión: se llama desde el arranque cuando haya proveedor real. */
 export function registrarProveedorCurriculo(p: ProveedorCurriculo | null): void {
@@ -141,7 +230,7 @@ export function hayProveedorCurriculo(): boolean {
 
 export async function buscarEnCurriculo(
   consulta: string,
-  opciones?: { materia?: Materia },
+  opciones?: { materia?: Materia; curso?: Curso },
 ): Promise<FragmentoCurricular[]> {
   if (!proveedorActivo) return [];
   try {
@@ -167,10 +256,11 @@ export function mensajeSinFuenteNormativa(ambito: 'ambos' | 'estatal' | 'autonom
 
   return {
     mensaje:
-      'Tu pregunta depende de normativa o del currículo oficial vigente. No dispongo ahora mismo de una ' +
-      'fuente oficial verificada para responderla, y prefiero no darte de memoria algo que puede haber ' +
-      'cambiado o ser inexacto. Te dejo dónde está la información de primera mano. Si quieres, pégame el ' +
-      'texto del documento y trabajo sobre él.',
+      'Tu pregunta depende de normativa o del currículo oficial vigente. No dispongo ahora mismo del texto ' +
+      'de esa norma, y prefiero no darte de memoria algo que puede haber cambiado o ser inexacto. En la ' +
+      'Región de Murcia el currículo de la ESO lo fija el Decreto 235/2022, de 7 de diciembre, modificado ' +
+      'por el Decreto 158/2024, de 1 de agosto. Te dejo los enlaces para leerlo de primera mano. Si ' +
+      'quieres, pégame el texto o hazle una foto y trabajo sobre él.',
     portales,
   };
 }

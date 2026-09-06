@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icono, type NombreIcono } from './ui/Icono';
 import { Segmentado } from './ui/primitivos';
 import type { Adjuntos } from '@/lib/cliente/adjuntos';
+import { avisoDeCombinacion } from '@/lib/curriculum/murcia';
 import {
   MAX_BYTES_ORIGEN,
   TIPOS_ACEPTADOS,
@@ -97,6 +98,9 @@ interface Props {
   preferencias: Preferencias;
   onPreferencias: (cambios: Partial<Preferencias>) => void;
   onHerramienta: (h: Herramienta) => void;
+  onLibro: () => void;
+  /** Título del libro que se está siguiendo, o null. */
+  libro: string | null;
   marcador: string;
 }
 
@@ -110,6 +114,8 @@ export function Redactor({
   preferencias,
   onPreferencias,
   onHerramienta,
+  onLibro,
+  libro,
   marcador,
 }: Props) {
   const [menu, setMenu] = useState(false);
@@ -243,6 +249,22 @@ export function Redactor({
                 </button>
 
                 <p className="mt-1 border-t border-borde px-3 pb-1.5 pt-2.5 text-[0.7rem] font-bold uppercase tracking-[0.09em] text-texto-tenue">
+                  Seguir mi libro
+                </p>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenu(false);
+                    onLibro();
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-texto transition hover:bg-superficie-2"
+                >
+                  <Icono nombre="libro" className="h-4 w-4 text-primario" />
+                  {libro ? 'Cambiar mi libro' : 'Subir páginas de mi libro'}
+                </button>
+
+                <p className="mt-1 border-t border-borde px-3 pb-1.5 pt-2.5 text-[0.7rem] font-bold uppercase tracking-[0.09em] text-texto-tenue">
                   Prepararme material
                 </p>
                 {HERRAMIENTAS.map((h) => (
@@ -332,9 +354,16 @@ export function Redactor({
             </span>
           </button>
 
-          <p className="hidden text-xs text-texto-tenue sm:block">
-            Arrastra o pega una foto aquí mismo
-          </p>
+          {libro && (
+            <button
+              type="button"
+              onClick={onLibro}
+              className="flex min-h-8 max-w-[45%] items-center gap-1.5 rounded-full border border-exito/35 bg-exito-suave px-2.5 text-xs font-medium text-exito transition hover:border-exito/60"
+            >
+              <Icono nombre="libro" className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{libro}</span>
+            </button>
+          )}
 
           {ajustes && (
             <div className="absolute bottom-10 left-0 z-30 w-full max-w-sm rounded-tarjeta border border-borde bg-superficie p-4 shadow-[var(--sombra)]">
@@ -374,6 +403,13 @@ export function Redactor({
                   </select>
                 </div>
               </div>
+
+              {avisoDeCombinacion(preferencias.materia, preferencias.curso) && (
+                <p className="mt-3 flex items-start gap-2 rounded-xl border border-aviso/35 bg-aviso-suave px-3 py-2 text-sm text-texto-suave">
+                  <Icono nombre="aviso" className="mt-0.5 h-4 w-4 shrink-0 text-aviso" />
+                  {avisoDeCombinacion(preferencias.materia, preferencias.curso)}
+                </p>
+              )}
 
               <div className="mt-3">
                 <p className="mb-1 text-sm font-medium text-texto">Cómo te lo explico</p>

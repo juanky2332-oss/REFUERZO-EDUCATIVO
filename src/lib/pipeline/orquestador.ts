@@ -194,25 +194,53 @@ export function bloqueEjercicioDeMaterial(
 ): string {
   if (!ejercicio) return '';
 
-  const cabecera = ejercicio.numero
-    ? `El alumno pregunta por la pregunta ${ejercicio.numero} de un material («${ejercicio.titulo}») generado por esta misma herramienta.`
-    : 'El alumno pregunta por un ejercicio de un material generado por esta misma herramienta.';
+  const donde = ejercicio.titulo ? ` de «${ejercicio.titulo}»` : '';
+  const n = ejercicio.numero;
+
+  // Qué se ha señalado y, por tanto, qué se espera. Antes esto era una sola
+  // instrucción que decía «resuélvelo» pasara lo que pasara: al pulsar
+  // «Explícamela» sobre la sesión 1 de un plan de estudio, el motor buscaba un
+  // enunciado que no existe y contestaba que le faltaban datos.
+  const marco: Record<typeof ejercicio.clase, string[]> = {
+    ejercicio: [
+      `El alumno pregunta por ${n ? `la pregunta ${n}` : 'un ejercicio'}${donde}, de un material generado por esta misma herramienta.`,
+      'Resuelve el ejercicio POR TU CUENTA desde el enunciado y compruébalo.',
+    ],
+    sesion: [
+      `El alumno pregunta por ${n ? `la sesión ${n}` : 'una sesión'}${donde}, de un PLAN DE ESTUDIO generado por esta misma herramienta.`,
+      'AQUÍ NO HAY NADA QUE RESOLVER: una sesión de estudio no es un problema, es un rato de trabajo.',
+      'Explícale qué tiene que hacer en esa sesión y cómo hacerlo: por dónde empezar, qué repasar primero,',
+      'qué significa cada cosa que se le pide y un ejemplo resuelto de cada tipo de tarea que aparezca.',
+      'NO le pidas el enunciado: no existe. Con esto tienes de sobra para ayudarle.',
+    ],
+    apartado: [
+      `El alumno pregunta por ${n ? `el apartado ${n}` : 'un apartado'}${donde}, de un RESUMEN generado por esta misma herramienta.`,
+      'AQUÍ NO HAY NADA QUE RESOLVER: es contenido teórico.',
+      'Explícale ese apartado a su nivel, con un ejemplo concreto que lo haga entender.',
+      'NO le pidas el enunciado: no existe.',
+    ],
+    paso: [
+      `El alumno no entiende ${n ? `el paso ${n}` : 'un paso'} de una explicación${donde} que ya se le dio.`,
+      'Rehaz ese paso desde el principio y explícale por qué sale lo que sale, con otras palabras.',
+      'El ejercicio completo va debajo: resuélvelo entero por tu cuenta para poder situar ese paso,',
+      'pero céntrate en aclararle justo lo que te pregunta.',
+    ],
+  };
+
+  const contenido = [
+    ejercicio.clase === 'ejercicio'
+      ? `ENUNCIADO: ${ejercicio.enunciado}`
+      : `CONTEXTO: ${ejercicio.enunciado}`,
+    ejercicio.solucionPropuesta
+      ? `LO QUE SE LE ENSEÑÓ (a verificar, no a repetir): ${ejercicio.solucionPropuesta}`
+      : 'No se le enseñó nada más.',
+  ].join('\n');
 
   return [
-    cabecera,
-    'La solución que se le enseñó junto al enunciado NO es fiable: la escribió otro proceso sin recalcularla.',
-    'Resuelve el ejercicio POR TU CUENTA desde el enunciado. Si tu resultado no coincide con esa solución,',
-    'dilo de forma explícita en las advertencias y quédate con el tuyo, que sí pasa por la comprobación.',
-    envolverNoConfiable(
-      'ejercicio_del_material',
-      [
-        `ENUNCIADO: ${ejercicio.enunciado}`,
-        ejercicio.solucionPropuesta
-          ? `SOLUCIÓN QUE SE LE ENSEÑÓ (a verificar): ${ejercicio.solucionPropuesta}`
-          : 'No se le enseñó ninguna solución.',
-      ].join('\n'),
-      nonce,
-    ),
+    ...marco[ejercicio.clase],
+    'Lo que se le enseñó lo escribió otro proceso sin recalcularlo, así que NO es fiable: si al comprobarlo',
+    'no te cuadra, dilo de forma explícita y quédate con lo tuyo, que sí pasa por la comprobación.',
+    envolverNoConfiable('contexto_de_la_consulta', contenido, nonce),
   ].join('\n');
 }
 

@@ -140,7 +140,7 @@ export function Redactor({
   const vacio = !texto.trim() && imagenes.length === 0;
 
   return (
-    <div className="no-imprimir zona-segura-abajo border-t border-borde bg-superficie/95 px-3 pt-3 backdrop-blur sm:px-4">
+    <div className="no-imprimir zona-segura-abajo bg-superficie/95 px-3 pt-1 backdrop-blur sm:px-4">
       <div className="mx-auto max-w-3xl">
         {imagenes.length > 0 && (
           <ul className="mb-2 flex flex-wrap gap-2">

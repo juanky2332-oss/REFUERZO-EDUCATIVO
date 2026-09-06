@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BarraHistorial, type PreguntaDelHilo } from './BarraHistorial';
 import { BurbujaBreve } from './BurbujaBreve';
 import { PanelHerramienta, type PeticionHerramienta } from './PanelHerramienta';
 import { PanelLibro } from './PanelLibro';
@@ -9,7 +10,7 @@ import { Redactor, type Herramienta } from './Redactor';
 import { VistaMaterial, type ConsultaSobrePregunta } from './VistaMaterial';
 import { VistaRespuesta, type ConsultaSobreRespuesta } from './VistaRespuesta';
 import { Icono, type NombreIcono } from './ui/Icono';
-import type { EjercicioDeMaterial } from '@/lib/ai/schemas';
+import type { ClaseContexto, EjercicioDeMaterial } from '@/lib/ai/schemas';
 import { useAdjuntos } from '@/lib/cliente/adjuntos';
 import type { ImagenPreparada } from '@/lib/cliente/imagenes';
 import { generarMaterial } from '@/lib/cliente/generar';
@@ -85,6 +86,14 @@ export function siguientesPasos(tipo: SolicitudMaterial['tipo']): Herramienta[] 
       return ['examen'];
   }
 }
+
+/** Cómo se llama en pantalla lo que se ha señalado, para la etiqueta del chat. */
+export const NOMBRE_CLASE: Record<ClaseContexto, string> = {
+  ejercicio: 'Pregunta',
+  sesion: 'Sesión',
+  apartado: 'Apartado',
+  paso: 'Paso',
+};
 
 export const NOMBRE_HERRAMIENTA: Record<Herramienta, string> = {
   ejercicios: 'Ponme ejercicios de esto',
@@ -174,6 +183,13 @@ export function preferenciasQueCorregir(
  * entera. Las tarjetas de material no entran: ocupan muchísimo y no cambian el
  * sentido de una duda sobre un ejercicio.
  */
+/** Las preguntas del alumno, que son los puntos por los que tiene sentido navegar. */
+export function preguntasDelHilo(entradas: Entrada[]): PreguntaDelHilo[] {
+  return entradas
+    .filter((e): e is Extract<Entrada, { tipo: 'usuario' }> => e.tipo === 'usuario')
+    .map((e) => ({ id: e.id, texto: e.texto, etiqueta: e.etiqueta }));
+}
+
 export function historialDe(entradas: Entrada[]): MensajeHistorial[] {
   const h: MensajeHistorial[] = [];
 
@@ -205,6 +221,21 @@ export function Chat() {
   const fin = useRef<HTMLDivElement>(null);
 
   const hayConversacion = entradas.length > 0;
+  const preguntas = useMemo(() => preguntasDelHilo(entradas), [entradas]);
+
+  /**
+   * Salta a un mensaje del hilo y lo señala un momento.
+   *
+   * Sin el destello, en una conversación larga se llega al sitio sin saber a
+   * cuál de los mensajes que se ven era.
+   */
+  const irA = useCallback((id: string) => {
+    const nodo = document.getElementById(`msg-${id}`);
+    if (!nodo) return;
+    nodo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    nodo.classList.add('destello');
+    setTimeout(() => nodo.classList.remove('destello'), 1400);
+  }, []);
   const ocupado = enCurso || generando;
 
   const marcador = useMemo(
@@ -374,8 +405,9 @@ export function Chat() {
           consulta.texto ||
           'Explícame esta pregunta paso a paso y comprueba si la solución que me has dado está bien.',
         imagenes: consulta.imagenes,
-        etiqueta: `Pregunta ${consulta.numero} · ${consulta.tituloMaterial}`,
+        etiqueta: `${NOMBRE_CLASE[consulta.clase]} ${consulta.numero} · ${consulta.tituloMaterial}`,
         ejercicio: {
+          clase: consulta.clase,
           titulo: consulta.tituloMaterial,
           numero: consulta.numero,
           enunciado: consulta.enunciado,
@@ -433,6 +465,8 @@ export function Chat() {
 
       setEntradas((prev) => {
         const sinFicha = prev.filter((e) => e.id !== id);
+        // Parar algo a propósito no es un fallo: se quita la ficha y ya está.
+        if (!r.ok && r.cancelado) return sinFicha;
         return [
           ...sinFicha,
           r.ok
@@ -494,6 +528,7 @@ export function Chat() {
           ? `Paso ${consulta.numeroPaso} · ${consulta.tituloRespuesta}`
           : consulta.tituloRespuesta,
         ejercicio: {
+          clase: sobreUnPaso ? 'paso' : 'ejercicio',
           titulo: consulta.tituloRespuesta,
           numero: consulta.numeroPaso,
           enunciado: consulta.enunciado,
@@ -563,7 +598,11 @@ export function Chat() {
 
           <ol className="space-y-4">
             {entradas.map((e) => (
-              <li key={e.id} className={e.tipo === 'usuario' ? 'flex justify-end' : ''}>
+              <li
+                key={e.id}
+                id={`msg-${e.id}`}
+                className={`scroll-mt-4 rounded-tarjeta ${e.tipo === 'usuario' ? 'flex justify-end' : ''}`}
+              >
                 {e.tipo === 'usuario' && <Mensaje entrada={e} />}
 
                 {e.tipo === 'respuesta' && (
@@ -701,6 +740,18 @@ export function Chat() {
           </div>
         )}
       </div>
+
+      {/* Sin preguntas no hay barra, y sin barra tampoco su borde: una línea
+          suelta encima del cuadro de escribir sólo ensucia la pantalla vacía. */}
+      {preguntas.length > 0 && (
+        <div className="no-imprimir border-t border-borde bg-superficie/95 px-3 pt-1 backdrop-blur sm:px-4">
+          <BarraHistorial preguntas={preguntas} onIr={irA} />
+        </div>
+      )}
+
+      <div
+        className={`no-imprimir ${preguntas.length === 0 ? 'border-t border-borde' : ''}`}
+      />
 
       <Redactor
         texto={texto}

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { PanelConsulta, type ConsultaEscrita } from './PanelConsulta';
 import { Texto, esLineaDeFormula } from './VistaRespuesta';
 import { Icono } from './ui/Icono';
+import type { ClaseContexto } from '@/lib/ai/schemas';
 import { paraAlumno, puntuacionTotal, type MaterialAlumno, type MaterialVerificado, type PreguntaVerificada } from '@/lib/material';
 
 /**
@@ -19,6 +20,8 @@ import { paraAlumno, puntuacionTotal, type MaterialAlumno, type MaterialVerifica
  */
 
 export interface ConsultaSobrePregunta extends ConsultaEscrita {
+  /** Una sesión de un plan no se resuelve; el motor tiene que saberlo. */
+  clase: ClaseContexto;
   numero: number;
   enunciado: string;
   solucionPropuesta: string;
@@ -48,9 +51,13 @@ export function preguntasQueNoCuadran(material: MaterialVerificado): number[] {
 export function vocabularioDe(material: MaterialVerificado): {
   elemento: string;
   elementos: string;
+  /** Qué es esto para el motor: un ejercicio, una sesión o un apartado. */
+  clase: ClaseContexto;
   /** Cómo se titula el desarrollo dentro de la solución. */
   planteamiento: string;
   respuesta: string;
+  /** Texto del botón que pide desarrollarlo en el chat. */
+  desarrollar: string;
   /** Ya en plural y en minúscula: pegarle una «s» daba «solucións». */
   verTodas: string;
   verRespuesta: string;
@@ -64,6 +71,8 @@ export function vocabularioDe(material: MaterialVerificado): {
     return {
       elemento: 'sesión',
       elementos: 'sesiones',
+      clase: 'sesion',
+      desarrollar: 'Explícame esta sesión',
       planteamiento: 'Qué hacer en esta sesión',
       respuesta: 'Cómo sabrás que te ha salido bien',
       verTodas: 'Ver todos los objetivos',
@@ -75,6 +84,8 @@ export function vocabularioDe(material: MaterialVerificado): {
     return {
       elemento: 'apartado',
       elementos: 'apartados',
+      clase: 'apartado',
+      desarrollar: 'Explícame este apartado',
       planteamiento: 'Las ideas, una a una',
       respuesta: 'Contenido del apartado',
       verTodas: 'Desplegar todos los apartados',
@@ -85,6 +96,8 @@ export function vocabularioDe(material: MaterialVerificado): {
   return {
     elemento: 'pregunta',
     elementos: 'preguntas',
+    clase: 'ejercicio',
+    desarrollar: 'Explícamela paso a paso',
     planteamiento: 'Cómo se hace, paso a paso',
     respuesta: 'Resultado',
     verTodas: 'Ver todas las soluciones',
@@ -222,9 +235,11 @@ export function VistaMaterial({
                 onPreguntar
                   ? () =>
                       onPreguntar({
-                        texto:
-                          'Explícame esta pregunta paso a paso, como si fuera la primera vez que la veo.',
+                        texto: voz.esCuestionario
+                          ? 'Explícame esta pregunta paso a paso, como si fuera la primera vez que la veo.'
+                          : `Explícame ${voz.elemento === 'sesión' ? 'esta sesión' : 'este apartado'} con detalle: qué tengo que hacer exactamente y cómo, con algún ejemplo.`,
                         imagenes: [],
+                        clase: voz.clase,
                         numero: p.numero,
                         enunciado: p.enunciado,
                         solucionPropuesta: p.solucion,
@@ -237,6 +252,7 @@ export function VistaMaterial({
                 setConsultando(null);
                 onPreguntar?.({
                   ...consulta,
+                  clase: voz.clase,
                   numero: p.numero,
                   enunciado: p.enunciado,
                   solucionPropuesta: p.solucion,
@@ -284,9 +300,9 @@ export function VistaMaterial({
 
         <p className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-texto-tenue">
           <Icono nombre="aviso" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          Los enunciados y sus soluciones los he generado yo y no han pasado por la comprobación
-          que sí hago al resolver: si una solución te chirría, pulsa «Preguntar» y la rehago paso a
-          paso.
+          {voz.esCuestionario
+            ? 'Los enunciados y sus soluciones los he generado yo y no han pasado por la comprobación que sí hago al resolver: si una solución te chirría, pulsa «Preguntar» y la rehago paso a paso.'
+            : `Esto lo he preparado yo. Si algo no te encaja o quieres más detalle de ${voz.elemento === 'sesión' ? 'una sesión' : 'un apartado'}, pulsa «Preguntar».`}
         </p>
       </div>
 
@@ -460,7 +476,7 @@ function Pregunta({
                 className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-exito/40 bg-superficie px-3 text-xs font-semibold text-exito transition hover:bg-exito-suave"
               >
                 <Icono nombre="lapiz" className="h-3.5 w-3.5" />
-                Explícamela paso a paso
+                {voz.desarrollar}
               </button>
             )}
           </div>
@@ -481,8 +497,12 @@ function Pregunta({
       {consultando && (
         <div className="border-t border-borde p-3.5">
           <PanelConsulta
-            marcador="¿Qué no te sale? Puedes escribir tu respuesta para que te la corrija, o preguntar por dónde empezar."
-            textoBoton="Preguntar sobre esta"
+            marcador={
+              voz.esCuestionario
+                ? '¿Qué no te sale? Puedes escribir tu respuesta para que te la corrija, o preguntar por dónde empezar.'
+                : '¿Qué no te queda claro? Puedes preguntar por dónde empezar o pedir un ejemplo.'
+            }
+            textoBoton={voz.esCuestionario ? 'Preguntar sobre esta' : 'Preguntar'}
             ocupado={ocupado}
             onEnviar={onEnviarConsulta}
           />

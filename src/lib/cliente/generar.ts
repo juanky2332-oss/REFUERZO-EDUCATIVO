@@ -13,7 +13,8 @@ import type { MaterialVerificado } from '@/lib/material';
 
 export type ResultadoMaterial =
   | { ok: true; material: MaterialVerificado }
-  | { ok: false; error: string };
+  /** `cancelado` distingue «lo he parado yo» de «ha fallado»: no es un error. */
+  | { ok: false; error: string; cancelado?: boolean };
 
 export async function generarMaterial(
   peticion: Omit<
@@ -47,7 +48,7 @@ export async function generarMaterial(
     return { ok: true, material };
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') {
-      return { ok: false, error: 'Se ha cancelado.' };
+      return { ok: false, error: 'Se ha cancelado.', cancelado: true };
     }
     return {
       ok: false,

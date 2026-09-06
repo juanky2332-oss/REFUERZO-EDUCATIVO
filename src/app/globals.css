@@ -164,6 +164,15 @@ body {
   animation: latido 1.4s ease-in-out infinite;
 }
 
+/* Señala un momento el mensaje al que se acaba de saltar desde el historial. */
+@keyframes destello {
+  0%   { box-shadow: 0 0 0 3px color-mix(in oklab, var(--primario) 45%, transparent); }
+  100% { box-shadow: 0 0 0 3px transparent; }
+}
+.destello {
+  animation: destello 1.4s ease-out;
+}
+
 /* Impresión: cuadernillos y solucionarios legibles en papel (regla 28). */
 @media print {
   .no-imprimir {

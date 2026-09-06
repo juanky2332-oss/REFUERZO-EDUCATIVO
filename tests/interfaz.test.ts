@@ -17,6 +17,9 @@ import {
   puntos,
   vocabularioDe,
 } from '@/components/VistaMaterial';
+import { moverIndice, resumirPregunta } from '@/components/BarraHistorial';
+import { preguntasDelHilo } from '@/components/Chat';
+import { bloqueEjercicioDeMaterial } from '@/lib/pipeline/orquestador';
 import type { Analisis } from '@/lib/types';
 import type { MaterialVerificado } from '@/lib/material';
 import { repartirArchivos } from '@/lib/cliente/adjuntos';
@@ -453,5 +456,126 @@ describe('el selector se corrige con lo que se detecta de verdad', () => {
       curso: '1eso',
     });
     expect(cambios).toEqual({});
+  });
+});
+
+describe('qué se le dice al motor según lo que se ha señalado', () => {
+  const base = { titulo: 'Plan de estudio', numero: 1, solucionPropuesta: 'Objetivo' };
+
+  it('un ejercicio se resuelve', () => {
+    const b = bloqueEjercicioDeMaterial(
+      { ...base, clase: 'ejercicio', enunciado: 'Resuelve 2x = 10' },
+      'n',
+    );
+    expect(b).toContain('POR TU CUENTA');
+    expect(b).toContain('la pregunta 1');
+  });
+
+  it('una sesión de un plan NO se resuelve y NO se pide su enunciado', () => {
+    const b = bloqueEjercicioDeMaterial(
+      { ...base, clase: 'sesion', enunciado: 'Sesión 1: Introducción a las potencias' },
+      'n',
+    );
+    expect(b).toContain('NO HAY NADA QUE RESOLVER');
+    expect(b).toContain('NO le pidas el enunciado');
+    expect(b).toContain('la sesión 1');
+    expect(b).not.toContain('Resuelve el ejercicio POR TU CUENTA');
+  });
+
+  it('un apartado de un resumen tampoco se resuelve', () => {
+    const b = bloqueEjercicioDeMaterial(
+      { ...base, clase: 'apartado', enunciado: 'La célula' },
+      'n',
+    );
+    expect(b).toContain('NO HAY NADA QUE RESOLVER');
+    expect(b).toContain('el apartado 1');
+  });
+
+  it('un paso de una explicación se rehace, no se trata como pregunta de una ficha', () => {
+    const b = bloqueEjercicioDeMaterial(
+      { ...base, clase: 'paso', enunciado: 'Hallar x en 3x + 2 = 14' },
+      'n',
+    );
+    expect(b).toContain('el paso 1');
+    expect(b).toContain('Rehaz ese paso');
+    expect(b).not.toContain('la pregunta 1');
+  });
+
+  it('en todos los casos avisa de que lo enseñado no es fiable', () => {
+    for (const clase of ['ejercicio', 'sesion', 'apartado', 'paso'] as const) {
+      const b = bloqueEjercicioDeMaterial({ ...base, clase, enunciado: 'x' }, 'n');
+      expect(b).toContain('NO es fiable');
+    }
+  });
+
+  it('sin contexto no añade nada', () => {
+    expect(bloqueEjercicioDeMaterial(null, 'n')).toBe('');
+  });
+});
+
+describe('el material dice de qué clase es cada cosa', () => {
+  const base: MaterialVerificado = {
+    titulo: 'X',
+    materia: 'matematicas',
+    curso: '1eso',
+    tema: 'T',
+    instrucciones: '',
+    duracionMinutos: null,
+    preguntas: [
+      { numero: 1, enunciado: 'e', puntuacion: 1, pasos: [], solucion: 's', criterioCorreccion: '', comprobaciones: [] },
+    ],
+    loQueHayQueAprender: [],
+    notasDidacticas: [],
+  };
+  const sinPuntos = { ...base, preguntas: base.preguntas.map((p) => ({ ...p, puntuacion: 0 })) };
+
+  it('un examen manda ejercicios; un plan, sesiones; un resumen, apartados', () => {
+    expect(vocabularioDe(base).clase).toBe('ejercicio');
+    expect(vocabularioDe({ ...sinPuntos, titulo: 'Plan de estudio' }).clase).toBe('sesion');
+    expect(vocabularioDe({ ...sinPuntos, titulo: 'Resumen' }).clase).toBe('apartado');
+  });
+
+  it('el botón no habla de resolver donde no hay nada que resolver', () => {
+    expect(vocabularioDe(base).desarrollar).toMatch(/paso a paso/);
+    expect(vocabularioDe({ ...sinPuntos, titulo: 'Plan de estudio' }).desarrollar).not.toMatch(
+      /paso a paso/,
+    );
+  });
+});
+
+describe('navegación por la conversación', () => {
+  it('avanza y retrocede sin salirse', () => {
+    expect(moverIndice(0, 3, 1)).toBe(1);
+    expect(moverIndice(2, 3, 1)).toBe(2);
+    expect(moverIndice(0, 3, -1)).toBe(0);
+  });
+
+  it('desde «en ninguna» va a la primera o a la última según la flecha', () => {
+    expect(moverIndice(-1, 3, 1)).toBe(0);
+    expect(moverIndice(-1, 3, -1)).toBe(2);
+  });
+
+  it('sin preguntas no hay a dónde ir', () => {
+    expect(moverIndice(-1, 0, 1)).toBe(-1);
+    expect(moverIndice(0, 0, -1)).toBe(-1);
+  });
+
+  it('recorta la pregunta sin cortar palabras ni dejarla vacía', () => {
+    expect(resumirPregunta('  hola   qué  tal ')).toBe('hola qué tal');
+    expect(resumirPregunta('')).toBe('Enviaste una foto');
+    const largo = resumirPregunta('necesito cinco ejercicios de ecuaciones de primer grado sencillas para mañana', 40);
+    expect(largo.endsWith('…')).toBe(true);
+    expect(largo.length).toBeLessThanOrEqual(41);
+    expect(largo).not.toMatch(/ …$/);
+  });
+
+  it('sólo se navega por lo que ha preguntado el alumno', () => {
+    const p = preguntasDelHilo([
+      { tipo: 'usuario', id: 'a', texto: 'Primera', miniaturas: [] },
+      { tipo: 'error', id: 'b', mensaje: 'fallo' },
+      { tipo: 'usuario', id: 'c', texto: 'Segunda', miniaturas: [], etiqueta: 'Sesión 1' },
+    ]);
+    expect(p.map((x) => x.id)).toEqual(['a', 'c']);
+    expect(p[1].etiqueta).toBe('Sesión 1');
   });
 });

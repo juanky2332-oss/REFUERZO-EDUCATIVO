@@ -185,7 +185,17 @@ export const esquemaImagenEntrante = z.object({
  * todo lo demás; lo que aporta es el marco: el motor sabe que esa solución la
  * escribió él en otra llamada y que su trabajo ahora es rehacerla, no repetirla.
  */
+export const CLASES_CONTEXTO = ['ejercicio', 'sesion', 'apartado', 'paso'] as const;
+export type ClaseContexto = (typeof CLASES_CONTEXTO)[number];
+
 export const esquemaEjercicioDeMaterial = z.object({
+  /**
+   * Qué es lo que se ha señalado. Sin esto, el motor trataba una sesión de un
+   * plan de estudio como si fuera un problema que resolver y contestaba que le
+   * faltaba el enunciado. No todo lo que se puede señalar en esta aplicación es
+   * un ejercicio.
+   */
+  clase: z.enum(CLASES_CONTEXTO).default('ejercicio'),
   titulo: z.string().max(300).default(''),
   numero: z.number().int().positive().nullable().default(null),
   enunciado: z.string().max(4000),
